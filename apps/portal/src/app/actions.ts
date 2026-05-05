@@ -5,10 +5,11 @@ import {
   property, tenant, invoice, payment, maintenanceRequest, 
   expense, vendor, communicationTemplate, communicationBatch, 
   communicationLog, communicationFlow, communicationFlowStep, 
-  communicationAnalytics, systemAuditLog, cronHeartbeat
+  communicationAnalytics, systemAuditLog, cronHeartbeat,
+  user, session
 } from "@dane/database";
 import { uploadToR2 } from "@/lib/r2";
-import { sql, eq, desc, count, and, asc, gte, lte } from "drizzle-orm";
+import { sql, eq, desc, count, and, or, asc, gte, lte } from "drizzle-orm";
 
 // ... existing functions ...
 
@@ -1330,7 +1331,7 @@ export async function triggerFlow(managerId: string, trigger: string, tenantId: 
 
         if (step.channel === 'email' || step.channel === 'both') {
           if (t.email) {
-             const res = await mailer({ to: t.email, subject: parsedSubject, text: parsedContent });
+             const res = await mailer({ to: t.email, subject: parsedSubject, html: parsedContent, text: parsedContent });
              await db.insert(communicationLog).values({
                 id: `log-${crypto.randomUUID().slice(0, 8)}`,
                 managerId, tenantId, propertyId: t.propertyId,
@@ -1436,7 +1437,7 @@ export async function updateSecuritySettings(userId: string, data: { twoFactorEn
 
 export async function getActiveSessions(userId: string) {
   try {
-    const data = await db.select().from(schema.session).where(eq(schema.session.userId, userId));
+    const data = await db.select().from(session).where(eq(session.userId, userId));
     return { success: true, sessions: data };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -1445,7 +1446,7 @@ export async function getActiveSessions(userId: string) {
 
 export async function revokeSession(sessionId: string, userId: string) {
   try {
-    await db.delete(schema.session).where(and(eq(schema.session.id, sessionId), eq(schema.session.userId, userId)));
+    await db.delete(session).where(and(eq(session.id, sessionId), eq(session.userId, userId)));
     
     await logSystemEvent({
       managerId: userId,
