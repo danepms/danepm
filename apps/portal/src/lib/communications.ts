@@ -1,4 +1,4 @@
-import 'dotenv/config';
+
 
 const ZEPTOMAIL_API_KEY = process.env.ZEPTOMAIL_API_KEY;
 const AT_USERNAME = process.env.AT_USERNAME;
