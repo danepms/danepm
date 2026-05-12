@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HardHat, Plus, X, Loader2, Phone, Mail, Star, MessageSquare, Search } from 'lucide-react';
-import { getVendors, createVendor, updateVendor } from '@/app/actions';
+import { api } from '@/lib/api';
 
 const SPECIALTIES = ['plumber', 'electrician', 'painter', 'carpenter', 'mason', 'welder', 'cleaner', 'general'];
 const SPECIALTY_COLORS: Record<string, string> = {
@@ -30,7 +30,7 @@ export const VendorsTab = ({ managerId }: { managerId: string }) => {
 
   const fetchVendors = async () => {
     setIsLoading(true);
-    const res = await getVendors(managerId);
+    const res = await api.get<any>(`/maintenance/vendors?managerId=${managerId}`);
     if (res.success) setVendors(res.vendors || []);
     setIsLoading(false);
   };
@@ -40,7 +40,7 @@ export const VendorsTab = ({ managerId }: { managerId: string }) => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
-    const res = await createVendor({ ...newVendor, managerId });
+    const res = await api.post<any>("/maintenance/vendors", { ...newVendor, managerId });
     if (res.success) {
       setShowCreate(false);
       setNewVendor({ name: '', phone: '', email: '', specialty: 'general', notes: '' });
@@ -50,12 +50,12 @@ export const VendorsTab = ({ managerId }: { managerId: string }) => {
   };
 
   const handleRate = async (vendorId: string, rating: number) => {
-    await updateVendor(vendorId, { rating: rating.toString() });
+    await api.post<any>(`/maintenance/vendors/${vendorId}`, { rating: rating.toString() });
     setVendors(vendors.map(v => v.id === vendorId ? { ...v, rating: rating.toString() } : v));
   };
 
   const handleSaveNote = async (vendorId: string) => {
-    await updateVendor(vendorId, { notes: editNote });
+    await api.post<any>(`/maintenance/vendors/${vendorId}`, { notes: editNote });
     setVendors(vendors.map(v => v.id === vendorId ? { ...v, notes: editNote } : v));
     setEditingVendor(null);
     setEditNote('');

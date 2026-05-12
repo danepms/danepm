@@ -7,7 +7,10 @@
  */
 
 import { neon } from '@neondatabase/serverless';
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { join } from 'path';
+
+config({ path: join(process.cwd(), 'apps/portal/.env') });
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -19,6 +22,88 @@ async function migrate() {
   console.log('');
 
   const steps = [
+    {
+      name: 'user',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "user" (
+        "id" text PRIMARY KEY,
+        "name" text NOT NULL,
+        "email" text NOT NULL UNIQUE,
+        "email_verified" boolean NOT NULL,
+        "image" text,
+        "created_at" timestamp NOT NULL,
+        "updated_at" timestamp NOT NULL,
+        "role" text DEFAULT 'manager',
+        "phone" text,
+        "two_factor_enabled" boolean DEFAULT false,
+        "security_config" jsonb,
+        "api_key" text UNIQUE,
+        "notification_prefs" jsonb,
+        "suspended" boolean DEFAULT false,
+        "suspended_at" timestamp,
+        "suspended_by" text
+      )`
+    },
+    {
+      name: 'session',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "session" (
+        "id" text PRIMARY KEY,
+        "expires_at" timestamp NOT NULL,
+        "token" text NOT NULL UNIQUE,
+        "created_at" timestamp NOT NULL,
+        "updated_at" timestamp NOT NULL,
+        "ip_address" text,
+        "user_agent" text,
+        "user_id" text NOT NULL REFERENCES "user"("id")
+      )`
+    },
+    {
+      name: 'account',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "account" (
+        "id" text PRIMARY KEY,
+        "account_id" text NOT NULL,
+        "provider_id" text NOT NULL,
+        "user_id" text NOT NULL REFERENCES "user"("id"),
+        "access_token" text,
+        "refresh_token" text,
+        "id_token" text,
+        "access_token_expires_at" timestamp,
+        "refresh_token_expires_at" timestamp,
+        "scope" text,
+        "password" text,
+        "created_at" timestamp NOT NULL,
+        "updated_at" timestamp NOT NULL
+      )`
+    },
+    {
+      name: 'verification',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "verification" (
+        "id" text PRIMARY KEY,
+        "identifier" text NOT NULL,
+        "value" text NOT NULL,
+        "expires_at" timestamp NOT NULL,
+        "created_at" timestamp,
+        "updated_at" timestamp
+      )`
+    },
+    {
+      name: 'property',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "property" (
+        "id" text PRIMARY KEY,
+        "name" text NOT NULL,
+        "location" text NOT NULL,
+        "image_url" text,
+        "user_id" text NOT NULL REFERENCES "user"("id"),
+        "has_residential" boolean DEFAULT false,
+        "has_commercial" boolean DEFAULT false,
+        "residential_units" text,
+        "commercial_units" text,
+        "is_live" boolean DEFAULT false,
+        "setup_step" text DEFAULT '1',
+        "config" text,
+        "owner_id" text REFERENCES "user"("id"),
+        "created_at" timestamp NOT NULL
+      )`
+    },
     {
       name: 'tenant',
       run: () => sql`CREATE TABLE IF NOT EXISTS "tenant" (
@@ -317,8 +402,101 @@ async function migrate() {
         "created_at" timestamp NOT NULL,
         "expires_at" timestamp NOT NULL
       )`
+    },
+    {
+      name: 'add_suspended',
+      run: () => sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "suspended" boolean DEFAULT false`
+    },
+    {
+      name: 'add_suspended_at',
+      run: () => sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "suspended_at" timestamp`
+    },
+    {
+      name: 'add_suspended_by',
+      run: () => sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "suspended_by" text`
+    },
+    {
+      name: 'add_expense_unit_id',
+      run: () => sql`ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "unit_id" text`
+    },
+    {
+      name: 'add_expense_tenant_id',
+      run: () => sql`ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "tenant_id" text REFERENCES "tenant"("id")`
+    },
+    {
+      name: 'add_expense_initiated_by',
+      run: () => sql`ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "initiated_by" text DEFAULT 'manager'`
+    },
+    {
+      name: 'add_expense_initiated_by_id',
+      run: () => sql`ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "initiated_by_id" text`
+    },
+    {
+      name: 'add_maintenance_initiated_by',
+      run: () => sql`ALTER TABLE "maintenance_request" ADD COLUMN IF NOT EXISTS "initiated_by" text DEFAULT 'tenant'`
+    },
+    {
+      name: 'add_maintenance_initiated_by_id',
+      run: () => sql`ALTER TABLE "maintenance_request" ADD COLUMN IF NOT EXISTS "initiated_by_id" text`
+    },
+    {
+      name: 'settlement_allocation',
+      run: () => sql`CREATE TABLE IF NOT EXISTS "settlement_allocation" (
+        "id" text PRIMARY KEY,
+        "payment_id" text NOT NULL REFERENCES "payment"("id"),
+        "invoice_id" text NOT NULL REFERENCES "invoice"("id"),
+        "manager_id" text NOT NULL REFERENCES "user"("id"),
+        "amount" text NOT NULL,
+        "description" text,
+        "created_at" timestamp NOT NULL DEFAULT now()
+      )`
+    },
+    {
+      name: 'drop_payment_invoice_id',
+      run: () => sql`ALTER TABLE "payment" DROP COLUMN IF EXISTS "invoice_id"`
+    },
+    {
+      name: 'add_user_business_config',
+      run: () => sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "business_config" jsonb`
+    },
+    {
+      name: 'add_user_finance_config',
+      run: () => sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "finance_config" jsonb`
+    },
+    {
+      name: 'upgrade_property_config_jsonb',
+      run: () => sql`ALTER TABLE "property" ALTER COLUMN "config" TYPE jsonb USING config::jsonb`
+    },
+    {
+      name: 'add_communication_log_external_id',
+      run: () => sql`ALTER TABLE "communication_log" ADD COLUMN IF NOT EXISTS "external_id" text`
+    },
+    {
+      name: 'add_invoice_type',
+      run: () => sql`ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "type" text DEFAULT 'rent'`
+    },
+    {
+      name: 'create_comm_queue',
+      run: () => sql`
+        CREATE TABLE IF NOT EXISTS "communication_queue" (
+          "id" text PRIMARY KEY,
+          "manager_id" text NOT NULL REFERENCES "user"("id"),
+          "tenant_id" text NOT NULL REFERENCES "tenant"("id"),
+          "template_id" text REFERENCES "communication_template"("id"),
+          "flow_id" text REFERENCES "communication_flow"("id"),
+          "channel" text NOT NULL,
+          "subject" text,
+          "content" text NOT NULL,
+          "scheduled_for" timestamp NOT NULL,
+          "status" text DEFAULT 'pending',
+          "created_at" timestamp NOT NULL
+        );
+      `
+    },
+    {
+      name: 'add_property_marketing_enabled',
+      run: () => sql`ALTER TABLE "property" ADD COLUMN IF NOT EXISTS "marketing_enabled" boolean DEFAULT true`
     }
-
   ];
 
   let created = 0;

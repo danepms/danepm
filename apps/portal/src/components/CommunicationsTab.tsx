@@ -4,18 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Send, Zap, BarChart3, Clock, Copy
 } from 'lucide-react';
-import { 
-  getCommunicationTemplates, 
-  saveCommunicationTemplate, 
-  getTargetedTenants, 
-  launchCampaign,
-  getCommunicationBatches,
-  getCommunicationFlows,
-  saveCommunicationFlow,
-  getCommunicationAnalytics,
-  getArrearsLedger,
-  triggerFlow
-} from '@/app/actions';
+import { api } from '@/lib/api';
 import { useToast } from '@/context/ToastContext';
 
 // Sub-components
@@ -33,7 +22,7 @@ interface CommunicationsTabProps {
 
 export const CommunicationsTab = ({ managerId, properties, initialView = 'overview' }: CommunicationsTabProps) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaign' | 'templates' | 'history' | 'flows'>(initialView);
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaign' | 'templates' | 'history' | 'flows' | 'upcoming'>(initialView);
   
   // Data State
   const [templates, setTemplates] = useState<any[]>([]);
@@ -41,6 +30,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
   const [flows, setFlows] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [overdueTenants, setOverdueTenants] = useState<any[]>([]);
+  const [upcoming, setUpcoming] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Campaign Builder State
@@ -69,18 +59,20 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
 
   const loadInitialData = async () => {
     setIsLoading(true);
-    const [tplRes, batchRes, flowRes, anaRes, overdueRes] = await Promise.all([
-      getCommunicationTemplates(managerId),
-      getCommunicationBatches(managerId),
-      getCommunicationFlows(managerId),
-      getCommunicationAnalytics(managerId),
-      getArrearsLedger(managerId)
+    const [tplRes, batchRes, flowRes, anaRes, overdueRes, upRes] = await Promise.all([
+      api.get<any>(`/communications/templates?managerId=${managerId}`),
+      api.get<any>(`/communications/batches?managerId=${managerId}`),
+      api.get<any>(`/communications/flows?managerId=${managerId}`),
+      api.get<any>(`/communications/analytics?managerId=${managerId}`),
+      api.get<any>(`/finance/arrears-ledger?managerId=${managerId}`),
+      api.get<any>(`/communications/upcoming?managerId=${managerId}`)
     ]);
     if (tplRes.success) setTemplates(tplRes.templates || []);
     if (batchRes.success) setBatches(batchRes.batches || []);
     if (flowRes.success) setFlows(flowRes.flows || []);
     if (anaRes.success) setAnalytics(anaRes);
-    if (overdueRes.success) setOverdueTenants(overdueRes.tenants || []);
+    if (overdueRes.success) setOverdueTenants(overdueRes.ledger || []);
+    if (upRes.success) setUpcoming(upRes.upcoming || []);
     setIsLoading(false);
   };
 
@@ -91,7 +83,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
   ];
 
   const refreshRecipients = async () => {
-    const res = await getTargetedTenants(managerId, targeting);
+    const res = await api.get<any>(`/communications/targeted-tenants?managerId=${managerId}&propertyId=${targeting.propertyId || ''}&hasArrears=${targeting.hasArrears}&status=${targeting.status || ''}`);
     if (res.success) {
       setRecipients(res.tenants || []);
       setSelectedRecipientIds((res.tenants || []).map((t: any) => t.id));
@@ -100,7 +92,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
 
   const handleLaunch = async () => {
     setIsSending(true);
-    const res = await launchCampaign({
+    const res = await api.post<any>("/communications/launch-campaign", {
       managerId,
       name: campaignName || `Broadcast ${new Date().toLocaleDateString()}`,
       recipientIds: selectedRecipientIds,
@@ -125,7 +117,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
 
   const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await saveCommunicationTemplate({ ...editingTemplate, managerId });
+    const res = await api.post<any>("/communications/templates", { ...editingTemplate, managerId });
     if (res.success) {
       showToast("Blueprint Saved", "success");
       setEditingTemplate(null);
@@ -133,14 +125,19 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
     }
   };
 
-  const handleSaveFlow = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = await saveCommunicationFlow({ ...editingFlow, managerId });
+  const saveFlow = async (flow: any) => {
+    const res = await api.post<any>("/communications/flows", { ...flow, managerId });
     if (res.success) {
-      showToast("Intelligence Activated", "success");
+      showToast(flow.id ? "Sequence Updated" : "Intelligence Activated", "success");
       setEditingFlow(null);
       loadInitialData();
     }
+    return res;
+  };
+
+  const handleSaveFlow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveFlow(editingFlow);
   };
 
   const handleManualNudge = async () => {
@@ -152,7 +149,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
       return;
     }
     for (const tenantId of selectedRecipientIds) {
-      await triggerFlow(managerId, 'manual_nudge', tenantId);
+      await api.post<any>("/communications/trigger-flow", { managerId, trigger: 'manual_nudge', tenantId });
     }
     showToast("Collection sequence fired.", "success");
     setSelectedRecipientIds([]);
@@ -235,17 +232,17 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
           <CommAutomation 
             flows={flows} flowTab={flowTab} setFlowTab={setFlowTab}
             setEditingFlow={setEditingFlow} triggerOptions={triggerOptions}
-            saveCommunicationFlow={saveCommunicationFlow} loadInitialData={loadInitialData}
+            saveCommunicationFlow={saveFlow} loadInitialData={loadInitialData}
             analytics={analytics} overdueTenants={overdueTenants}
             selectedRecipientIds={selectedRecipientIds} setSelectedRecipientIds={setSelectedRecipientIds}
             handleManualNudge={handleManualNudge}
           />
         )}
 
-        {(activeTab === 'templates' || activeTab === 'history') && (
+        {(activeTab === 'templates' || activeTab === 'history' || activeTab === 'upcoming') && (
            <CommVault 
-              templates={templates} batches={batches} 
-              activeTab={activeTab === 'history' ? 'history' : 'templates'}
+              templates={templates} batches={batches} upcoming={upcoming}
+              activeTab={activeTab === 'history' ? 'history' : activeTab === 'upcoming' ? 'upcoming' : 'templates'}
               setActiveTab={setActiveTab} setEditingTemplate={setEditingTemplate}
            />
         )}

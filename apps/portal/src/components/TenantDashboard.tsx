@@ -10,31 +10,77 @@ import {
   TrendingUp, Zap, Clock, LogOut
 } from 'lucide-react';
 
+import { api } from '@/lib/api';
+
 interface TenantDashboardProps {
   user: any;
   onLogout: () => void;
-  tenantData?: any; // Property info, invoices, etc.
   children?: React.ReactNode;
 }
 
-export const TenantDashboard = ({ user, onLogout, tenantData, children }: TenantDashboardProps) => {
+export const TenantDashboard = ({ user, onLogout, children }: TenantDashboardProps) => {
   const [activeTab, setActiveTab] = useState('home');
+  const [tenantData, setTenantData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPaying, setIsPaying] = useState(false);
 
-  // MOCK DATA based on screenshots
-  const mockTenant = {
-    name: user?.name || "Samuel Eto'o",
-    tier: "DANE GOLD RESIDENT",
-    unit: "UNIT 202",
+  React.useEffect(() => {
+    const loadData = async () => {
+      if (user?.id) {
+        const res = await api.get<any>(`/portal/tenant-dashboard?userId=${user.id}`);
+        if (res.success && res.isLinked) {
+          setTenantData(res);
+        }
+      }
+      setIsLoading(false);
+    };
+    loadData();
+  }, [user]);
+
+  const handlePay = async () => {
+    if (!tenantData?.tenant) return;
+    setIsPaying(true);
+    // Use the total arrears as the amount to pay
+    const amount = parseFloat(tenantData.tenant.arrears || "0");
+    if (amount <= 0) {
+      setIsPaying(false);
+      return;
+    }
+    
+    const res = await api.post<any>("/portal/paystack/initialize", {
+      tenantId: tenantData.tenant.id,
+      amount,
+      email: user.email
+    });
+    if (res.success && res.authUrl) {
+      window.location.href = res.authUrl;
+    } else {
+      alert("Payment initialization failed: " + (res.error || "Unknown error"));
+      setIsPaying(false);
+    }
+  };
+
+  const hasProperty = !!tenantData;
+  const isOverdue = parseFloat(tenantData?.tenant?.arrears || "0") > 0;
+
+  const displayData = {
+    name: user?.name || "Resident",
+    tier: "VERIFIED RESIDENT",
+    unit: tenantData?.tenant?.unitId || "UNIT --",
     property: {
-      name: "Dane Heights",
-      location: "Kileleshwa, Plot 44/22",
+      name: tenantData?.property?.name || "Dane Managed Property",
+      location: tenantData?.property?.location || "Nairobi, KE",
       image: null
     },
-    rentStatus: "OVERDUE",
-    monthlyRent: "KES 25,000",
-    totalArrears: "KES 25,000",
-    hasProperty: true // Set to true to show the dashboard, false to show "Not Linked" state
+    rentStatus: isOverdue ? "OVERDUE" : "ALL CLEAR",
+    monthlyRent: `KES ${parseFloat(tenantData?.tenant?.moveInCharges || "0").toLocaleString()}`, // Using moveInCharges temporarily as base rent
+    totalArrears: `KES ${parseFloat(tenantData?.tenant?.arrears || "0").toLocaleString()}`,
+    hasProperty
   };
+
+  if (isLoading) {
+    return <div className="h-screen w-full flex items-center justify-center font-mono text-[10px] uppercase animate-pulse">Syncing...</div>;
+  }
 
   const services = [
     { name: "Mama Fua (Naomi)", phone: "0711 222 333", type: "Laundry & Cleaning", price: "from 500/-", icon: Users },
@@ -55,10 +101,10 @@ export const TenantDashboard = ({ user, onLogout, tenantData, children }: Tenant
         </div>
         <div>
           <h2 className="text-3xl font-black uppercase tracking-tighter text-[var(--text-base)] leading-none mb-1">
-            {mockTenant.property.name}
+            {displayData.property.name}
           </h2>
           <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold flex items-center gap-2">
-            <LayoutGrid size={12} /> {mockTenant.property.location}
+            <LayoutGrid size={12} /> {displayData.property.location}
           </p>
         </div>
       </div>
@@ -66,12 +112,12 @@ export const TenantDashboard = ({ user, onLogout, tenantData, children }: Tenant
       {/* Rent Status Card */}
       <div className="bg-[var(--bg-panel)] border border-[var(--border)] rounded-2xl p-8 space-y-6 glass-card relative overflow-hidden">
          <div className="space-y-1">
-            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-black tracking-widest">Rent Status</p>
+            <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-black tracking-widest">Account Status</p>
             <div className="flex items-center justify-between">
-               <h3 className={`text-5xl font-black uppercase tracking-tighter ${mockTenant.rentStatus === 'OVERDUE' ? 'text-red-500' : 'text-emerald-500'}`}>
-                  {mockTenant.rentStatus}
+               <h3 className={`text-5xl font-black uppercase tracking-tighter ${isOverdue ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {displayData.rentStatus}
                </h3>
-               {mockTenant.rentStatus === 'OVERDUE' && (
+               {isOverdue && (
                  <AlertCircle size={48} className="text-red-500 animate-pulse" />
                )}
             </div>
@@ -79,30 +125,22 @@ export const TenantDashboard = ({ user, onLogout, tenantData, children }: Tenant
 
          <div className="grid grid-cols-2 gap-4">
             <div>
-               <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold">Monthly Rent</p>
-               <p className="text-xl font-black text-[var(--text-base)]">{mockTenant.monthlyRent}</p>
-            </div>
-            <div className="text-right">
                <p className="text-[10px] font-mono text-[var(--text-muted)] uppercase font-bold">Total Arrears</p>
-               <p className={`text-xl font-black ${mockTenant.rentStatus === 'OVERDUE' ? 'text-red-500' : 'text-[var(--text-base)]'}`}>
-                  {mockTenant.totalArrears}
+               <p className={`text-xl font-black ${isOverdue ? 'text-red-500' : 'text-[var(--text-base)]'}`}>
+                  {displayData.totalArrears}
                </p>
             </div>
          </div>
 
-         <button className="w-full bg-[var(--text-base)] text-[var(--bg-panel)] font-black uppercase py-5 rounded-xl flex items-center justify-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_8px_30px_-4px_rgba(0,0,0,0.3)]">
-            <Wallet size={20} /> Pay Now (M-PESA)
-         </button>
-      </div>
-
-      {/* Simulation Helpers (Only for dev/demo) */}
-      <div className="grid grid-cols-2 gap-4">
-         <button className="py-3 bg-[var(--bg-panel)] border border-[var(--border)] rounded-lg text-[9px] font-mono uppercase font-black text-[var(--text-muted)] hover:text-[var(--text-base)] transition-all">
-            Simulate Unpaid
-         </button>
-         <button className="py-3 bg-[var(--bg-panel)] border border-[var(--border)] rounded-lg text-[9px] font-mono uppercase font-black text-[var(--text-muted)] hover:text-[var(--text-base)] transition-all">
-            Simulate Paid
-         </button>
+         {isOverdue && (
+           <button 
+             onClick={handlePay}
+             disabled={isPaying}
+             className="w-full bg-[var(--text-base)] text-[var(--bg-panel)] font-black uppercase py-5 rounded-xl flex items-center justify-center gap-4 hover:opacity-90 active:scale-[0.98] transition-all shadow-[0_8px_30px_-4px_rgba(0,0,0,0.3)] disabled:opacity-50"
+           >
+              <Wallet size={20} /> {isPaying ? "Processing..." : "Pay Now (Card/M-Pesa)"}
+           </button>
+         )}
       </div>
 
       {/* Lifestyle Hub */}
@@ -391,7 +429,7 @@ export const TenantDashboard = ({ user, onLogout, tenantData, children }: Tenant
                   {user?.name || "Samuel Eto'o"} <span className="text-[var(--accent-bg)] ml-1">🏅</span>
                </h1>
                <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase font-bold tracking-widest">
-                  {mockTenant.tier} • {mockTenant.unit}
+                  {displayData.tier} • {displayData.unit}
                </p>
             </div>
          </div>
@@ -408,7 +446,7 @@ export const TenantDashboard = ({ user, onLogout, tenantData, children }: Tenant
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto px-6 py-8 no-scrollbar">
-         {!mockTenant.hasProperty ? renderNotLinked() : (
+         {!displayData.hasProperty ? renderNotLinked() : (
            <>
              {activeTab === 'home' && renderHome()}
              {activeTab === 'services' && renderServices()}

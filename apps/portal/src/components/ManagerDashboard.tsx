@@ -22,6 +22,7 @@ type TabItem = {
 };
 
 const TABS: TabItem[] = [
+  { id: 'overview', label: 'Overview', icon: LayoutTemplate },
   { id: 'properties', label: 'Properties', icon: Building2 },
   { id: 'tenants', label: 'Tenants', icon: Users },
   { 
@@ -57,7 +58,7 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
   const pathname = usePathname();
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(TABS.filter(t => t.children).map(t => t.id));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isBottomBar, setIsBottomBar] = useState(false);
   const [flyoutPositions, setFlyoutPositions] = useState<Record<string, React.CSSProperties>>({});
@@ -157,7 +158,7 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
                 <div key={tab.id} className={`${isBottomBar ? '' : 'mb-1'} relative`}>
                   {/* Parent button */}
                   <button
-                    onClick={(e) => hasChildren ? handleToggleGroup(e, tab.id) : handleTabChange(tab.id)}
+                    onClick={(e) => hasChildren ? (isSidebarCollapsed || isBottomBar ? handleToggleGroup(e, tab.id) : toggleGroup(tab.id)) : handleTabChange(tab.id)}
                     title={isSidebarCollapsed || isBottomBar ? tab.label : undefined}
                     className={`nav-item group relative flex items-center justify-center rounded-lg transition-all ${
                       isBottomBar ? 'px-3 h-10' : 'w-full px-4 py-2.5 justify-start'
@@ -188,6 +189,26 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
                       </div>
                     )}
                   </button>
+
+                  {/* Inline Children for Sidebar */}
+                  {hasChildren && expanded && !isSidebarCollapsed && !isBottomBar && (
+                    <div className="mt-1 ml-4 pl-4 border-l border-[var(--border)] border-opacity-10 space-y-1 animate-reveal">
+                      {tab.children!.map((child) => (
+                        <button
+                          key={child.id}
+                          onClick={() => handleTabChange(child.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                            activeTab === child.id 
+                              ? 'bg-[var(--accent-bg)]/10 text-[var(--accent-bg)]' 
+                              : 'text-[var(--text-muted)] hover:text-[var(--text-base)] hover:bg-[var(--bg-ghost)]/50'
+                          }`}
+                        >
+                          <child.icon size={14} className={activeTab === child.id ? 'text-[var(--accent-bg)]' : 'opacity-40'} />
+                          <span className="whitespace-nowrap">{child.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -201,13 +222,13 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
               isBottomBar ? 'bottom-[calc(100%+16px)] right-4 w-64' : 'bottom-[calc(100%+8px)] left-4 right-4'
             }`}>
               <div className="p-3 border-b border-[var(--border)] border-opacity-5 bg-[var(--bg-ghost)]/50">
-                 <p className="font-mono text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-black">System Terminal</p>
+                 <p className="font-mono text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-black">Settings</p>
               </div>
               <div className="p-1">
                  {[
-                   { id: 'audit', label: 'System Ledger', icon: Activity, desc: 'Forensic Audit Trails' },
-                   { id: 'security', label: 'Account & Access', icon: Shield, desc: 'Sessions & Security' },
-                   { id: 'profile', label: 'Personal Info', icon: Users, desc: 'Identity & Bio' }
+                   { id: 'audit', label: 'Activity', icon: Activity, desc: 'History' },
+                   { id: 'security', label: 'Security', icon: Shield, desc: 'Privacy' },
+                   { id: 'profile', label: 'Profile', icon: Users, desc: 'Bio' }
                  ].map(item => (
                    <button
                      key={item.id}
@@ -231,7 +252,7 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
                     <div className="w-8 h-8 rounded-sm bg-red-500/5 flex items-center justify-center">
                        <LogOut size={14} />
                     </div>
-                    <span className="text-[11px] font-black uppercase tracking-widest">Terminate Session</span>
+                    <span className="text-[11px] font-black uppercase tracking-widest">Log out</span>
                  </button>
               </div>
             </div>
@@ -374,8 +395,8 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
           {children || (
             <div className={`max-w-7xl mx-auto h-full flex flex-col items-center justify-center opacity-30 select-none pointer-events-none transition-all duration-500 ${!hasProperties ? 'blur-md scale-95 opacity-10' : ''}`}>
               <Cpu size={120} className="text-[var(--text-muted)] mb-8" />
-              <h2 className="text-4xl font-bold tracking-tighter uppercase">Interface Primary Buffer</h2>
-              <p className="font-mono text-xs uppercase tracking-widest mt-4">Module: {activeTab} // Layer: Primary</p>
+              <h2 className="text-4xl font-bold tracking-tighter uppercase">Ready to start</h2>
+              <p className="font-mono text-xs uppercase tracking-widest mt-4">Viewing {activeTab}</p>
             </div>
           )}
         </main>
@@ -386,7 +407,8 @@ export const ManagerDashboard = ({ onLogout, user, hasProperties, onUnlock, chil
         const hasChildren = tab.children && tab.children.length > 0;
         const expanded = hasChildren && isGroupExpanded(tab.id);
         
-        if (!expanded || !hasChildren) return null;
+        // ONLY SHOW FLYOUTS IN COLLAPSED OR BOTTOM BAR MODES
+        if (!expanded || !hasChildren || (!isSidebarCollapsed && !isBottomBar)) return null;
 
         const pos = flyoutPositions[tab.id] || {};
 

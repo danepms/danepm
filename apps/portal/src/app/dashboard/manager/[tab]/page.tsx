@@ -3,12 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from '@/lib/auth-client';
-import { 
-  getUserProperties, 
-  getPaginatedTenants, 
-  updateTenantAssignment, 
-  getTenantStats 
-} from '@/app/actions';
+import { api } from '@/lib/api';
 import { PropertiesTab } from '@/components/PropertiesTab';
 import { TenantsTab } from '@/components/TenantsTab';
 import { InvoicesTab } from '@/components/InvoicesTab';
@@ -18,7 +13,8 @@ import { RequestsTab } from '@/components/RequestsTab';
 import { ExpensesTab } from '@/components/ExpensesTab';
 import { VendorsTab } from '@/components/VendorsTab';
 import { CommunicationsTab } from '@/components/CommunicationsTab';
-import { AuditVault } from '@/components/AuditVault';
+import { ActivityLog } from '@/components/AuditVault';
+import { ArchivedTenantsTab } from '@/components/ArchivedTenantsTab';
 import { SettingsView } from '@/components/SettingsView';
 
 export default function ManagerTabPage() {
@@ -34,15 +30,18 @@ export default function ManagerTabPage() {
   const [hasMore, setHasMore] = useState(false);
   const [isTenantsLoading, setIsTenantsLoading] = useState(false);
 
+  // 1. STABLE GLOBAL DATA (Properties & Stats)
   useEffect(() => {
     if (isPending || !session) return;
     let isMounted = true;
 
-    async function loadData() {
-      setIsLoading(true);
+    async function loadGlobalData() {
+      // Only show global loading on first mount
+      if (properties.length === 0) setIsLoading(true);
+      
       const [propsRes, statsRes] = await Promise.all([
-        getUserProperties(session?.user.id || ''),
-        getTenantStats(session?.user.id || '')
+        api.get<any>(`/properties?managerId=${session?.user.id || ''}`),
+        api.get<any>(`/tenants/stats?managerId=${session?.user.id || ''}`)
       ]);
 
       if (isMounted) {
@@ -52,16 +51,22 @@ export default function ManagerTabPage() {
       }
     }
 
-    loadData();
-    if (tab === 'tenants') fetchTenants(1);
-
+    loadGlobalData();
     return () => { isMounted = false; };
-  }, [session, isPending, tab]);
+  }, [session?.user.id, isPending]);
 
-  const fetchTenants = async (page: number) => {
-    if (!session) return;
+  // 2. TAB-SPECIFIC DATA (Tenants)
+  useEffect(() => {
+    if (tab === 'tenants' && tenantsData.length === 0) {
+      fetchTenants(1);
+    }
+  }, [tab, session?.user.id]);
+
+  const fetchTenants = async (page: number, force = false) => {
+    if (!session || (!force && tenantsData.length > 0 && page === currentPage)) return;
+    
     setIsTenantsLoading(true);
-    const res = await getPaginatedTenants(session.user.id, page);
+    const res = await api.get<any>(`/tenants?managerId=${session.user.id}&page=${page}`);
     if (res.success) {
       setTenantsData(res.tenants || []);
       setHasMore(res.hasMore || false);
@@ -71,8 +76,8 @@ export default function ManagerTabPage() {
   };
 
   const handleRefreshTenants = () => {
-    fetchTenants(currentPage);
-    getTenantStats(session?.user.id || '').then(res => {
+    fetchTenants(currentPage, true);
+    api.get<any>(`/tenants/stats?managerId=${session?.user.id || ''}`).then((res: any) => {
       if (res.success) setTenantStats(res.stats);
     });
   };
@@ -108,8 +113,8 @@ export default function ManagerTabPage() {
       case 'campaigns': return <CommunicationsTab managerId={managerId} properties={properties} initialView="campaign" />;
       case 'flows': return <CommunicationsTab managerId={managerId} properties={properties} initialView="flows" />;
       case 'templates': return <CommunicationsTab managerId={managerId} properties={properties} initialView="templates" />;
-      case 'archives': return <CommunicationsTab managerId={managerId} properties={properties} initialView="history" />;
-      case 'audit': return <AuditVault managerId={managerId} />;
+      case 'archives': return <ArchivedTenantsTab managerId={managerId} />;
+      case 'audit': return <ActivityLog managerId={managerId} properties={properties} />;
       case 'security': return <SettingsView user={session.user} initialTab="security" />;
       case 'profile': return <SettingsView user={session.user} initialTab="profile" />;
       default: return <PropertiesTab properties={properties} isLoading={isLoading} />;

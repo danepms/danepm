@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowLeftRight, ChevronLeft, ChevronRight, Building2, TrendingUp, TrendingDown, AlertTriangle, Phone } from 'lucide-react';
-import { getReconciliationSummary, getArrearsLedger } from '@/app/actions';
+import { api } from '@/lib/api';
 
 export const ReconciliationTab = ({ managerId }: { managerId: string }) => {
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
@@ -17,15 +17,15 @@ export const ReconciliationTab = ({ managerId }: { managerId: string }) => {
   const fetchData = async () => {
     setIsLoading(true);
     const [recRes, arrRes] = await Promise.all([
-      getReconciliationSummary(managerId, period),
-      getArrearsLedger(managerId, 1),
+      api.get<any>(`/finance/reconciliation-summary?managerId=${managerId}&period=${period}`),
+      api.get<any>(`/finance/arrears-ledger?managerId=${managerId}&page=1`),
     ]);
     if (recRes.success) {
       setSummary(recRes.summary);
       setBreakdown(recRes.breakdown || []);
     }
     if (arrRes.success) {
-      setArrears(arrRes.tenants || []);
+      setArrears(arrRes.ledger || []);
       setArrearsHasMore(arrRes.hasMore || false);
     }
     setIsLoading(false);
@@ -34,9 +34,9 @@ export const ReconciliationTab = ({ managerId }: { managerId: string }) => {
   useEffect(() => { fetchData(); }, [period]);
 
   const fetchArrears = async (p: number) => {
-    const res = await getArrearsLedger(managerId, p);
+    const res = await api.get<any>(`/finance/arrears-ledger?managerId=${managerId}&page=${p}`);
     if (res.success) {
-      setArrears(res.tenants || []);
+      setArrears(res.ledger || []);
       setArrearsHasMore(res.hasMore || false);
       setArrearsPage(p);
     }
@@ -63,10 +63,26 @@ export const ReconciliationTab = ({ managerId }: { managerId: string }) => {
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-none">Reconciliation</h2>
           <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-[0.2em] mt-3">How well you're collecting rent this month</p>
         </div>
-        <div className="flex items-center gap-3 bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 rounded-xl p-1.5 shadow-sm">
-          <button onClick={() => shiftPeriod(-1)} className="p-2.5 hover:bg-[var(--bg-ghost)] rounded-lg transition-all"><ChevronLeft size={16} /></button>
-          <span className="font-mono text-sm font-black px-4 min-w-[160px] text-center">{formatPeriod(period)}</span>
-          <button onClick={() => shiftPeriod(1)} className="p-2.5 hover:bg-[var(--bg-ghost)] rounded-lg transition-all"><ChevronRight size={16} /></button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 rounded-xl p-1.5 shadow-sm">
+            <button onClick={() => shiftPeriod(-1)} className="p-2.5 hover:bg-[var(--bg-ghost)] rounded-lg transition-all"><ChevronLeft size={16} /></button>
+            <span className="font-mono text-sm font-black px-4 min-w-[160px] text-center">{formatPeriod(period)}</span>
+            <button onClick={() => shiftPeriod(1)} className="p-2.5 hover:bg-[var(--bg-ghost)] rounded-lg transition-all"><ChevronRight size={16} /></button>
+          </div>
+          <button 
+            onClick={async () => {
+              if (confirm('Run penalty processor for all overdue invoices? This will create penalty invoices based on your finance policy.')) {
+                const res = await api.post<any>('/finance/apply-penalties', { managerId });
+                if (res.success) {
+                  alert(`Penalty processor complete. Applied ${res.applied} penalties.`);
+                  fetchData();
+                }
+              }
+            }}
+            className="bg-red-500/10 text-red-600 border border-red-500/20 px-6 py-4 font-mono text-[11px] uppercase font-black hover:bg-red-500 hover:text-white transition-all rounded-xl shadow-sm"
+          >
+            Apply Penalties
+          </button>
         </div>
       </div>
 

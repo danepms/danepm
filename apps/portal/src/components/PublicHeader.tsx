@@ -19,8 +19,10 @@ export function PublicHeader({ title, showBack = false }: PublicHeaderProps) {
 
   // Determine title based on path if not provided
   const displayTitle = title || (
-    pathname === '/' ? 'Home' :
+    pathname === '/' ? 'Welcome' :
     pathname === '/auth' ? 'Auth' :
+    pathname === '/auth/forgot-password' ? 'Security' :
+    pathname === '/auth/reset-password' ? 'Restore' :
     pathname === '/wizard' ? 'Setup' :
     pathname.split('/').pop()?.toUpperCase() || 'Dane'
   );
@@ -54,6 +56,14 @@ export function PublicHeader({ title, showBack = false }: PublicHeaderProps) {
 
       {/* Center Nav */}
       <nav className="hidden lg:flex items-center gap-8">
+        {(session?.user as any)?.role === 'admin' && (
+          <button 
+            onClick={() => router.push('/dashboard/admin')}
+            className="font-mono text-[10px] uppercase font-bold text-[var(--accent-bg)] hover:bg-[var(--accent-bg)] hover:text-[var(--accent-text)] transition-all tracking-widest border border-[var(--accent-bg)] px-3 py-1 rounded-md"
+          >
+            Admin Panel
+          </button>
+        )}
         {['How it works', 'Talk to us', 'About DanePMS'].map((item) => (
           <button 
             key={item}

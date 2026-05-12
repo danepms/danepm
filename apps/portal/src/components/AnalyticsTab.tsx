@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { getRevenueHistory, getTenantStats } from '@/app/actions';
+import { api } from '@/lib/api';
 
 export const AnalyticsTab = ({ managerId }: { managerId: string }) => {
   const [history, setHistory] = useState<any[]>([]);
@@ -13,8 +13,8 @@ export const AnalyticsTab = ({ managerId }: { managerId: string }) => {
     const load = async () => {
       setIsLoading(true);
       const [histRes, statsRes] = await Promise.all([
-        getRevenueHistory(managerId, 6),
-        getTenantStats(managerId),
+        api.get<any>(`/finance/revenue-history?managerId=${managerId}&months=6`),
+        api.get<any>(`/tenants/stats?managerId=${managerId}`),
       ]);
       if (histRes.success) setHistory(histRes.history || []);
       if (statsRes.success) setStats(statsRes.stats);
@@ -49,7 +49,7 @@ export const AnalyticsTab = ({ managerId }: { managerId: string }) => {
       </div>
 
       {/* TREND CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)]">
           <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-2">Collection Trend</p>
           <div className="flex items-end gap-3">
@@ -60,28 +60,34 @@ export const AnalyticsTab = ({ managerId }: { managerId: string }) => {
           </div>
           <p className="font-mono text-[7px] opacity-30 mt-2">vs. previous month</p>
         </div>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)] border-l-amber-500/20">
+          <p className="font-mono text-[8px] uppercase text-amber-500 font-black tracking-widest mb-2">Maintenance Burn</p>
+          <p className="text-3xl font-black tracking-tighter">KES {(currentMonth?.maintenanceBurn || 0).toLocaleString()}</p>
+          <p className="font-mono text-[7px] opacity-30 mt-2">Spent on repairs this month</p>
+        </div>
         <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)]">
-          <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-2">Active Tenants</p>
-          <p className="text-3xl font-black tracking-tighter">{stats?.total || 0}</p>
-          <p className="font-mono text-[7px] opacity-30 mt-2">{stats?.withArrearsCount || 0} with outstanding balance</p>
+          <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-2">Net Profit</p>
+          <p className="text-3xl font-black tracking-tighter text-green-500">KES {(currentMonth?.netRevenue || 0).toLocaleString()}</p>
+          <p className="font-mono text-[7px] opacity-30 mt-2">Collections after repairs</p>
         </div>
         <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)]">
           <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-2">Total Arrears</p>
           <p className="text-3xl font-black tracking-tighter text-red-500">KES {(stats?.arrearsSum || 0).toLocaleString()}</p>
-          <p className="font-mono text-[7px] opacity-30 mt-2">across all tenants</p>
+          <p className="font-mono text-[7px] opacity-30 mt-2">Across all tenants</p>
         </div>
       </div>
 
       {/* REVENUE CHART */}
       <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 rounded-2xl shadow-[8px_8px_0px_0px_var(--shadow-color)] overflow-hidden">
-        <div className="p-8 border-b border-[var(--border)] border-opacity-5 flex items-center justify-between">
+        <div className="p-8 border-b border-[var(--border)] border-opacity-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="font-black uppercase tracking-tighter text-lg">Revenue — Last 6 Months</h3>
-            <p className="font-mono text-[8px] opacity-30 mt-1">Expected vs. collected rent</p>
+            <h3 className="font-black uppercase tracking-tighter text-lg">Fiscal Performance — Last 6 Months</h3>
+            <p className="font-mono text-[8px] opacity-30 mt-1">Net profit after maintenance deductions</p>
           </div>
-          <div className="flex items-center gap-6 font-mono text-[8px] uppercase font-black">
-            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[var(--text-base)] opacity-20" /> Expected</div>
-            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[var(--accent-bg)]" /> Collected</div>
+          <div className="flex flex-wrap items-center gap-6 font-mono text-[8px] uppercase font-black">
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[var(--text-base)] opacity-10" /> Expected</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-amber-500" /> Maintenance Burn</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-green-500" /> Net Profit</div>
           </div>
         </div>
         
@@ -89,39 +95,47 @@ export const AnalyticsTab = ({ managerId }: { managerId: string }) => {
           <div className="p-16 text-center font-mono text-sm uppercase font-black opacity-20">No revenue data yet. Generate some invoices first!</div>
         ) : (
           <div className="p-8">
-            <div className="flex items-end gap-4 h-64">
+            <div className="flex items-end gap-4 h-72">
               {history.map((h, i) => {
                 const expectedHeight = (h.expected / maxRevenue) * 100;
-                const collectedHeight = (h.collected / maxRevenue) * 100;
-                const rate = h.expected > 0 ? Math.round((h.collected / h.expected) * 100) : 0;
+                const burnHeight = (h.maintenanceBurn / maxRevenue) * 100;
+                const netHeight = (h.netRevenue / maxRevenue) * 100;
+                const collectionRate = h.expected > 0 ? Math.round((h.collected / h.expected) * 100) : 0;
 
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                    <div className="w-full flex items-end gap-1 h-52 relative">
-                      {/* Expected bar */}
+                    <div className="w-full flex items-end gap-1 h-60 relative">
+                      {/* Expected bar (Ghost) */}
                       <div className="flex-1 relative group/bar">
                         <div 
-                          className="w-full bg-[var(--text-base)] opacity-10 rounded-t-lg transition-all duration-700 ease-out"
+                          className="w-full bg-[var(--text-base)] opacity-5 rounded-t-lg transition-all duration-700 ease-out"
                           style={{ height: `${expectedHeight}%`, animationDelay: `${i * 100}ms` }}
                         />
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[var(--text-base)] text-[var(--bg-panel)] px-2 py-1 rounded-md font-mono text-[6px] font-black opacity-0 group-hover/bar:opacity-100 transition-all whitespace-nowrap">
-                          KES {h.expected.toLocaleString()}
-                        </div>
                       </div>
-                      {/* Collected bar */}
+                      {/* Burn bar (Amber) */}
                       <div className="flex-1 relative group/bar">
                         <div 
-                          className="w-full bg-[var(--accent-bg)] rounded-t-lg transition-all duration-700 ease-out"
-                          style={{ height: `${collectedHeight}%`, animationDelay: `${i * 100 + 50}ms` }}
+                          className="w-full bg-amber-500 opacity-60 rounded-t-lg transition-all duration-700 ease-out"
+                          style={{ height: `${burnHeight}%`, animationDelay: `${i * 100 + 50}ms` }}
                         />
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[var(--accent-bg)] text-[var(--accent-text)] px-2 py-1 rounded-md font-mono text-[6px] font-black opacity-0 group-hover/bar:opacity-100 transition-all whitespace-nowrap">
-                          KES {h.collected.toLocaleString()}
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-amber-500 text-black px-2 py-1 rounded-md font-mono text-[6px] font-black opacity-0 group-hover/bar:opacity-100 transition-all whitespace-nowrap z-10">
+                          BURN: KES {h.maintenanceBurn.toLocaleString()}
+                        </div>
+                      </div>
+                      {/* Net Revenue bar (Green) */}
+                      <div className="flex-1 relative group/bar">
+                        <div 
+                          className="w-full bg-green-500 rounded-t-lg transition-all duration-700 ease-out shadow-[0_4px_12px_rgba(34,197,94,0.3)]"
+                          style={{ height: `${netHeight}%`, animationDelay: `${i * 100 + 100}ms` }}
+                        />
+                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-green-500 text-white px-2 py-1 rounded-md font-mono text-[6px] font-black opacity-0 group-hover/bar:opacity-100 transition-all whitespace-nowrap z-10">
+                          NET: KES {h.netRevenue.toLocaleString()}
                         </div>
                       </div>
                     </div>
-                    <div className="text-center">
+                    <div className="text-center mt-2">
                       <p className="font-mono text-[10px] font-black">{formatPeriod(h.period)}</p>
-                      <p className={`font-mono text-[7px] font-black ${rate >= 80 ? 'text-green-500' : rate >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>{rate}%</p>
+                      <p className={`font-mono text-[7px] font-black opacity-40 uppercase tracking-widest`}>{collectionRate}% Collected</p>
                     </div>
                   </div>
                 );

@@ -7,7 +7,7 @@ import {
   Package, LayoutGrid, Zap, Wrench, FileText, CheckCircle2, Clock
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { getOwnerProperties, getOwnerPortfolioStats } from '@/app/actions';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { SettingsView } from '@/components/SettingsView';
@@ -49,7 +49,7 @@ const OverviewView = ({ properties, stats }: any) => {
             </div>
             <div className="space-y-4">
                {properties.map((prop: any) => {
-                  const config = JSON.parse(prop.config || '{}');
+                  const config = typeof prop.config === 'string' ? JSON.parse(prop.config || '{}') : (prop.config || {});
                   const units = config.units || [];
                   const occupied = units.filter((u: any) => u.status === 'occupied').length;
                   const occRate = units.length > 0 ? (occupied / units.length * 100).toFixed(0) : 0;
@@ -103,7 +103,7 @@ const PropertiesView = ({ properties }: any) => (
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
        {properties.map((prop: any) => {
-          const config = JSON.parse(prop.config || '{}');
+          const config = typeof prop.config === 'string' ? JSON.parse(prop.config || '{}') : (prop.config || {});
           const units = config.units || [];
           return (
             <div key={prop.id} className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-10 shadow-[12px_12px_0px_0px_var(--shadow-color)] space-y-8">
@@ -177,7 +177,7 @@ const FinancialsView = ({ properties, stats }: any) => (
           </thead>
           <tbody className="divide-y divide-[var(--border)] divide-opacity-5">
              {properties.map((prop: any) => {
-                const config = JSON.parse(prop.config || '{}');
+                const config = typeof prop.config === 'string' ? JSON.parse(prop.config || '{}') : (prop.config || {});
                 const units = config.units || [];
                 const occupied = units.filter((u:any) => u.status === 'occupied').length;
                 let propRev = 0;
@@ -255,10 +255,10 @@ export default function OwnerTabPage() {
     const loadData = async () => {
       setIsLoading(true);
       const [propsRes, statsRes] = await Promise.all([
-        getOwnerProperties(session.user.id),
-        getOwnerPortfolioStats(session.user.id)
+        api.get<any>(`/properties/owner?ownerId=${session.user.id}`),
+        api.get<any>(`/finance/owner-stats?ownerId=${session.user.id}`)
       ]);
-      if (propsRes.success) setProperties(propsRes.properties);
+      if (propsRes.success) setProperties(propsRes.properties || []);
       if (statsRes.success) setStats(statsRes.stats);
       setIsLoading(false);
     };

@@ -1,18 +1,37 @@
 "use server";
 
-import { db, property, tenant } from "@dane/database";
-import { eq } from "drizzle-orm";
-
 export async function getVacantUnits() {
   try {
-    // Note: In this schema, units are stored as JSON inside the property table.
-    // For a real V1 implementation, we would fetch properties and parse units.
-    // For now, we return empty to ensure the build passes and no ghost tables are referenced.
-    const data = await db.select().from(property).limit(0);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${apiUrl}/marketing/vacancies`, { cache: 'no-store' });
+    const data = await res.json();
 
-    return { success: true, units: [] };
+    if (!data.success) return { success: false, error: data.error };
+    
+    const units = data.vacancies.map((v: any) => ({
+        id: v.id,
+        name: v.unitName,
+        type: v.unitType,
+        rent: v.rent,
+        property: v.propertyName,
+        location: v.location,
+        imageUrl: v.imageUrl
+    }));
+
+    return { success: true, units };
   } catch (error: any) {
     console.error("Failed to fetch vacancies:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getVacancyDetails(id: string) {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${apiUrl}/marketing/vacancies/${id}`, { cache: 'no-store' });
+    const data = await res.json();
+    return data;
+  } catch (error: any) {
     return { success: false, error: error.message };
   }
 }

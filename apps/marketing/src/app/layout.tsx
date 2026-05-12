@@ -19,6 +19,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { CookieBanner } from '../components/CookieBanner';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -33,6 +35,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased noise-overlay">
         {children}
+        <CookieBanner />
       </body>
     </html>
   );

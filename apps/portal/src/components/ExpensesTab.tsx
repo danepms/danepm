@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Plus, X, Loader2, Image as ImageIcon, Eye } from 'lucide-react';
-import { getExpenses, createExpense, uploadReceipt } from '@/app/actions';
+import { api } from '@/lib/api';
 
 const CATEGORIES = ['maintenance', 'utilities', 'supplies', 'legal', 'other'];
 const CATEGORY_COLORS: Record<string, string> = {
@@ -38,7 +38,7 @@ export const ExpensesTab = ({ managerId, properties }: { managerId: string; prop
     const filters: any = {};
     if (categoryFilter) filters.category = categoryFilter;
     if (propertyFilter) filters.propertyId = propertyFilter;
-    const res = await getExpenses(managerId, p, filters);
+    const res = await api.get<any>(`/maintenance/expenses?managerId=${managerId}&page=${p}&category=${filters.category || ''}&propertyId=${filters.propertyId || ''}`);
     if (res.success) {
       setExpenses(res.expenses || []);
       setHasMore(res.hasMore || false);
@@ -55,7 +55,7 @@ export const ExpensesTab = ({ managerId, properties }: { managerId: string; prop
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
-    const res = await createExpense({ ...newExpense, managerId });
+    const res = await api.post<any>("/maintenance/expenses", { ...newExpense, managerId });
     if (res.success) {
       setShowCreate(false);
       setNewExpense({ propertyId: '', category: 'maintenance', description: '', amount: '', vendorName: '', vendorPhone: '', receipt: '', paidDate: new Date().toISOString().split('T')[0] });
@@ -70,7 +70,7 @@ export const ExpensesTab = ({ managerId, properties }: { managerId: string; prop
     setIsUploadingReceipt(true);
     const fd = new FormData();
     fd.append('photo', file);
-    const res = await uploadReceipt(fd);
+    const res = await api.post<any>("/maintenance/upload-receipt", fd);
     if (res.success && res.imageUrl) {
       setNewExpense({ ...newExpense, receipt: res.imageUrl });
     }

@@ -14,6 +14,11 @@ export const user = pgTable("user", {
     securityConfig: jsonb("security_config"), // stores { login_alerts: true, session_timeout: 3600, ... }
     apiKey: text("api_key").unique(), // for external integrations
     notificationPrefs: jsonb("notification_prefs"), // stores { invoice: { email: true, sms: false }, ... }
+    businessConfig: jsonb("business_config"), // stores { companyName: string, address: string, logo: string, ... }
+    financeConfig: jsonb("finance_config"), // stores { rentDueDay: number, penaltyGraceDays: number, penaltyType: 'flat' | 'percent', penaltyValue: number }
+    suspended: boolean("suspended").default(false),
+    suspendedAt: timestamp("suspended_at"),
+    suspendedBy: text("suspended_by"),
 });
 
 export const session = pgTable("session", {
@@ -70,9 +75,10 @@ export const property = pgTable("property", {
   commercialUnits: text("commercial_units"), // JSON stringified
   isLive: boolean("is_live").default(false),
   setupStep: text("setup_step").default("1"),
-  config: text("config"), // JSON stringified configuration
+  config: jsonb("config"), // Detailed configuration overrides
   ownerId: text("owner_id")
     .references(() => user.id),
+  marketingEnabled: boolean("marketing_enabled").default(true),
   createdAt: timestamp("created_at").notNull(),
 });
 
@@ -92,6 +98,10 @@ export const tenant = pgTable("tenant", {
   moveInCharges: text("move_in_charges").default("0"),
   moveInPhotos: text("move_in_photos"), // JSON array of URLs
   moveInDate: timestamp("move_in_date"),
+  moveOutDate: timestamp("move_out_date"),
+  moveOutPhotos: text("move_out_photos"), // JSON array of URLs
+  finalStatement: text("final_statement"), // JSON snapshot of refund/charges
+  status: text("status").default("active"), // active | archived
   notes: text("notes"),
   managerId: text("manager_id")
     .notNull()
@@ -107,6 +117,7 @@ export const invoice = pgTable("invoice", {
   managerId: text("manager_id").notNull().references(() => user.id),
   period: text("period").notNull(),
   description: text("description"),
+  type: text("type").default("rent"), // rent | penalty | utility | other
   amount: text("amount").notNull(),
   paid: text("paid").default("0"),
   balance: text("balance").notNull(),
@@ -120,13 +131,22 @@ export const invoice = pgTable("invoice", {
 export const payment = pgTable("payment", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id").notNull().references(() => tenant.id),
-  invoiceId: text("invoice_id").references(() => invoice.id),
   managerId: text("manager_id").notNull().references(() => user.id),
   amount: text("amount").notNull(),
   method: text("method").default("cash"),
   reference: text("reference"),
   notes: text("notes"),
   recordedAt: timestamp("recorded_at").notNull(),
+  createdAt: timestamp("created_at").notNull(),
+});
+
+export const settlementAllocation = pgTable("settlement_allocation", {
+  id: text("id").primaryKey(),
+  paymentId: text("payment_id").notNull().references(() => payment.id),
+  invoiceId: text("invoice_id").notNull().references(() => invoice.id),
+  managerId: text("manager_id").notNull().references(() => user.id),
+  amount: text("amount").notNull(),
+  description: text("description"), // e.g. "Partial Rent Payment"
   createdAt: timestamp("created_at").notNull(),
 });
 
@@ -150,6 +170,8 @@ export const maintenanceRequest = pgTable("maintenance_request", {
 export const expense = pgTable("expense", {
   id: text("id").primaryKey(),
   propertyId: text("property_id").notNull().references(() => property.id),
+  unitId: text("unit_id"), // Forensic link to specific room
+  tenantId: text("tenant_id").references(() => tenant.id), // Link to tenant who was there
   managerId: text("manager_id").notNull().references(() => user.id),
   requestId: text("request_id").references(() => maintenanceRequest.id),
   category: text("category").notNull(),
@@ -158,6 +180,8 @@ export const expense = pgTable("expense", {
   vendorName: text("vendor_name"),
   vendorPhone: text("vendor_phone"),
   receipt: text("receipt"),
+  initiatedBy: text("initiated_by").default("manager"), // manager | tenant
+  initiatedById: text("initiated_by_id"),
   paidDate: timestamp("paid_date"),
   createdAt: timestamp("created_at").notNull(),
 });
@@ -256,6 +280,7 @@ export const systemAuditLog = pgTable("system_audit_log", {
   entityId: text("entity_id"),
   actorId: text("actor_id"),
   actorName: text("actor_name"),
+  userAgent: text("user_agent"),
   payload: jsonb("payload"), // Stores { before: ..., after: ... }
   ipAddress: text("ip_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -304,3 +329,17 @@ export const invite = pgTable("invite", {
   expiresAt: timestamp("expires_at").notNull(),
 });
 
+
+export const communicationQueue = pgTable("communication_queue", {
+  id: text("id").primaryKey(),
+  managerId: text("manager_id").notNull().references(() => user.id),
+  tenantId: text("tenant_id").notNull().references(() => tenant.id),
+  templateId: text("template_id").references(() => communicationTemplate.id),
+  flowId: text("flow_id").references(() => communicationFlow.id),
+  channel: text("channel").notNull(), // sms | email | both
+  subject: text("subject"),
+  content: text("content").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  status: text("status").default("pending"), // pending | sent | failed | cancelled
+  createdAt: timestamp("created_at").notNull(),
+});

@@ -1,8 +1,11 @@
 "use client";
 
-import React from 'react';
-import { Building2, Plus, ArrowUpRight } from 'lucide-react';
-import Link from 'next/link';
+import React, { useState, useMemo } from 'react';
+import { Building2, Plus, Download, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, Activity, Zap } from 'lucide-react';
+import Link from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { parseConfig } from '@/lib/utils';
+import { PropertyCard } from './PropertyCard';
 
 interface PropertiesTabProps {
   properties: any[];
@@ -10,146 +13,230 @@ interface PropertiesTabProps {
 }
 
 export const PropertiesTab = ({ properties, isLoading }: PropertiesTabProps) => {
-  const totalProperties = properties.length;
-  const totalUnitsCount = properties.reduce((acc, prop) => {
-      const res = JSON.parse(prop.residentialUnits || '{}') as Record<string, string>;
-      const com = JSON.parse(prop.commercialUnits || '{}') as Record<string, string>;
-      return acc + Object.values(res).reduce((a: number, b: string) => a + (parseInt(b) || 0), 0) + 
-                  Object.values(com).reduce((a: number, b: string) => a + (parseInt(b) || 0), 0);
-  }, 0);
-  
-  const totalOccupiedCount = properties.reduce((acc, prop) => {
-      const config = JSON.parse(prop.config || '{}');
-      return acc + (config.units?.filter((u: any) => u.status === 'occupied').length || 0);
-  }, 0);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'arrears' | 'occupied'>('all');
+  const router = useRouter();
 
-  const totalMoney = properties.reduce((acc, prop) => {
-      const resUnits = JSON.parse(prop.residentialUnits || '{}');
-      const comUnits = JSON.parse(prop.commercialUnits || '{}');
-      const config = JSON.parse(prop.config || '{}');
-      
-      return acc + Object.entries(config.rents || {}).reduce((total, [type, priceVal]) => {
-          const count = (parseInt(resUnits[type] as string) || 0) + (parseInt(comUnits[type] as string) || 0);
-          let price = 0;
-          if (typeof priceVal === 'object' && priceVal !== null) {
-              price = ((parseFloat((priceVal as any).min) || 0) + (parseFloat((priceVal as any).max) || 0)) / 2;
-          } else {
-              price = parseFloat(priceVal as string) || 0;
-          }
-          return total + (count * price);
-      }, 0);
-  }, 0);
+  // UNIFIED SOURCE OF TRUTH HELPER
+  const getAccurateUnits = (p: any) => {
+    const config = parseConfig(p.config);
+    
+    // 1. Priority: Live Unit Registry
+    if (config.units?.length > 0) return config.units.length;
+
+    // 2. Priority: Excel upload records
+    if (config.masterUploads?.length > 0) {
+        const latestUpload = config.masterUploads[config.masterUploads.length - 1];
+        return parseInt(latestUpload.totalUnits) || 0;
+    }
+
+    // 3. Priority: Wizard Unit Summaries (New)
+    if (config.unitSummaries) {
+        const res = config.unitSummaries.residential || {};
+        const com = config.unitSummaries.commercial || {};
+        return Object.values(res).reduce((a: number, b: any) => a + (parseInt(b) || 0), 0) + 
+               Object.values(com).reduce((a: number, b: any) => a + (parseInt(b) || 0), 0);
+    }
+    
+    return 0;
+  };
+
+  const getUnifiedStats = (p: any) => {
+    const config = parseConfig(p.config);
+    const units = config.units || [];
+    const totalUnits = getAccurateUnits(p);
+    const occupied = units.filter((u: any) => u.status === 'occupied').length || 0;
+    const arrears = config.tenants?.reduce((s: number, t: any) => s + (parseFloat(t.arrears) || 0), 0) || 0;
+    
+    // Revenue logic mirrored from details page
+    const rents = config.rents || {};
+    const totalPotential = Object.entries(rents).reduce((acc, [type, priceVal]) => {
+        const count = units.filter((u: any) => u.typeId === type).length;
+        let price = 0;
+        if (Array.isArray(priceVal)) price = parseFloat(priceVal[0]) || 0;
+        else if (typeof priceVal === 'object' && priceVal !== null) price = (parseFloat((priceVal as any).min) || 0);
+        else price = parseFloat(priceVal as string) || 0;
+        return acc + (count * price);
+    }, 0);
+
+    return { totalUnits, occupied, arrears, totalPotential };
+  };
+
+  const globalStats = useMemo(() => {
+    let totalU = 0;
+    let totalO = 0;
+    let totalA = 0;
+    let totalExpected = 0;
+    let pendingCount = 0;
+
+    properties.forEach(p => {
+        if (!p.isLive) {
+            pendingCount++;
+            return;
+        }
+
+        const stats = getUnifiedStats(p);
+        totalU += stats.totalUnits;
+        totalO += stats.occupied;
+        totalA += stats.arrears;
+        totalExpected += stats.totalPotential;
+    });
+
+    return { totalU, totalO, totalA, totalExpected, pendingCount };
+  }, [properties]);
+
+  const filtered = useMemo(() => {
+    return properties.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.location.toLowerCase().includes(search.toLowerCase());
+        if (!matchesSearch) return false;
+        if (filter === 'pending') return !p.isLive;
+        
+        const stats = getUnifiedStats(p);
+        if (filter === 'occupied') return stats.occupied === stats.totalUnits && stats.totalUnits > 0;
+        if (filter === 'arrears') return stats.arrears > 0;
+        return true;
+    });
+  }, [properties, search, filter]);
 
   if (isLoading) {
     return (
-      <div className="h-[400px] flex items-center justify-center">
-         <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-[var(--accent-bg)] border-t-transparent rounded-full animate-spin" />
-            <p className="font-mono text-[10px] uppercase font-black opacity-50">Syncing Assets...</p>
+      <div className="h-[600px] flex items-center justify-center">
+         <div className="flex flex-col items-center gap-6">
+            <div className="w-12 h-12 border border-white/10 flex items-center justify-center animate-spin">
+                <div className="w-6 h-6 border-t border-[var(--accent-bg)]" />
+            </div>
+            <p className="font-mono text-[8px] uppercase font-black tracking-[0.6em] opacity-20">Loading...</p>
          </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-12 animate-reveal">
-      {/* STATS OVERVIEW */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)] group hover:translate-y-[-4px] transition-all">
-              <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Total Assets</p>
-              <div className="flex items-end justify-between">
-                  <p className="text-4xl font-black tracking-tighter">{totalProperties}</p>
-                  <Building2 className="opacity-10 group-hover:opacity-100 transition-opacity" size={24} />
-              </div>
+    <div className="space-y-12 animate-reveal pb-32 px-4 font-sans">
+      
+      {/* SHARP COMMAND HEADER */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 pt-8">
+        <div className="space-y-1">
+          <h2 className="text-5xl font-black uppercase tracking-tighter leading-none">Properties</h2>
+          <div className="flex items-center gap-3">
+            <div className="w-1.5 h-1.5 bg-green-500 animate-pulse" />
+            <p className="font-mono text-[7px] font-black uppercase tracking-[0.4em] opacity-20">{properties.filter(p => p.isLive).length} Live — {globalStats.pendingCount} Need Setup</p>
           </div>
-          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)] group hover:translate-y-[-4px] transition-all">
-              <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Unit Inventory</p>
-              <div className="flex items-end justify-between">
-                  <p className="text-4xl font-black tracking-tighter">{totalUnitsCount}</p>
-                  <div className="font-mono text-[10px] font-black text-[var(--accent-bg)] mb-1">{(totalOccupiedCount/totalUnitsCount * 100 || 0).toFixed(0)}% OCC</div>
-              </div>
-          </div>
-          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)] group hover:translate-y-[-4px] transition-all">
-              <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Total Rent</p>
-              <div className="flex items-end justify-between">
-                  <p className="text-4xl font-black tracking-tighter">KES {totalMoney.toLocaleString()}</p>
-              </div>
-          </div>
-          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)] group hover:translate-y-[-4px] transition-all">
-              <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Occupancy</p>
-              <div className="flex items-end justify-between">
-                  <p className="text-4xl font-black tracking-tighter">{totalOccupiedCount}</p>
-                  <Building2 className="opacity-10 group-hover:opacity-100 transition-opacity" size={24} />
-              </div>
-          </div>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-[var(--border)] pb-8 border-opacity-10">
-        <div>
-          <h2 className="text-5xl font-black uppercase tracking-tighter text-[var(--text-base)] leading-none">My Properties</h2>
-          <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-[0.2em] mt-3">
-            Overview of your managed assets and units
-          </p>
         </div>
-        <Link href="/dashboard/manager/properties/new" className="bg-[var(--text-base)] text-[var(--bg-panel)] px-8 py-4 font-mono text-[11px] uppercase font-black hover:translate-y-[-2px] active:translate-y-0 transition-all flex items-center gap-3 shadow-[8px_8px_0px_0px_var(--shadow-color)]">
-          <Plus size={16} /> New Property
-        </Link>
+        
+        <div className="flex gap-1 w-full lg:w-auto">
+            <button className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-[var(--bg-panel)] border border-white/5 rounded-none text-[9px] font-black uppercase tracking-widest hover:bg-white/5 transition-all">
+                <Download size={12} /> Download
+            </button>
+            <button onClick={() => router.push('/dashboard/manager/properties/new')} className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-[var(--text-base)] text-[var(--bg-panel)] rounded-none text-[9px] font-black uppercase tracking-widest hover:bg-[var(--accent-bg)] hover:text-white transition-all shadow-2xl">
+                <Plus size={12} /> Add Property
+            </button>
+        </div>
       </div>
 
-      {properties.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {properties.map((p) => {
-            const resUnits = JSON.parse(p.residentialUnits || '{}') as Record<string, string>;
-            const comUnits = JSON.parse(p.commercialUnits || '{}') as Record<string, string>;
-            const totalUnits = Object.values(resUnits).reduce((a: number, b: string) => a + (parseInt(b) || 0), 0) + 
-                              Object.values(comUnits).reduce((a: number, b: string) => a + (parseInt(b) || 0), 0);
-            
-            const config = JSON.parse(p.config || '{}');
-            const occupied = config.units?.filter((u: any) => u.status === 'occupied').length || 0;
+      {/* SHARP GLOBAL PULSE */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-px bg-white/5 border border-white/5">
+          {/* Revenue Health Map */}
+          <div className="lg:col-span-8 bg-[var(--bg-panel)] p-10 flex flex-col justify-between h-80">
+              <div className="space-y-1">
+                  <p className="text-[8px] font-black uppercase opacity-20 tracking-[0.5em]">Money Collection</p>
+                  <h3 className="text-3xl font-black tracking-tighter uppercase">Rent Overview</h3>
+              </div>
+              
+              <div className="flex items-end gap-1 h-32">
+                  {[40, 70, 45, 90, 65, 80, 100, 85, 95, 100].map((h, i) => (
+                      <div key={i} className="flex-1 bg-white/5 group relative hover:bg-[var(--accent-bg)]/20 transition-all cursor-crosshair">
+                          <div className="absolute bottom-0 left-0 right-0 bg-[var(--accent-bg)] transition-all" style={{ height: `${h}%` }} />
+                      </div>
+                  ))}
+              </div>
 
-            return (
-              <div key={p.id} className="group relative bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 rounded-2xl overflow-hidden hover:shadow-[16px_16px_0px_0px_var(--shadow-color)] transition-all hover:translate-y-[-4px]">
-                <div className="aspect-video bg-[var(--bg-ghost)] relative overflow-hidden">
-                  <img src={p.imageUrl || "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80"} alt={p.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" />
-                  <div className="absolute top-4 right-4 bg-[var(--bg-panel)] border border-[var(--border)] px-4 py-2 font-mono text-[9px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_var(--shadow-color)]">
-                    {p.location}
-                  </div>
-                </div>
-                <div className="p-8 space-y-6">
-                  <div className="flex justify-between items-start">
+              <div className="flex justify-between items-center pt-6 border-t border-white/5 font-mono">
+                  <div className="flex gap-12">
                       <div>
-                          <h3 className="text-2xl font-black uppercase tracking-tighter text-[var(--text-base)]">{p.name}</h3>
-                          <p className="font-mono text-[9px] text-[var(--text-muted)] uppercase font-bold tracking-widest mt-1">{totalUnits} Total Units</p>
+                          <p className="text-[7px] font-black uppercase opacity-20 mb-1">Arrears</p>
+                          <p className="text-xl font-black text-red-500">KES {globalStats.totalA.toLocaleString()}</p>
                       </div>
-                      <Link href={`/dashboard/manager/properties/${p.id}`} className="p-3 bg-[var(--text-base)] text-[var(--bg-panel)] hover:bg-[var(--accent-bg)] hover:text-[var(--accent-text)] transition-all rounded-lg">
-                          <ArrowUpRight size={18} />
-                      </Link>
-                  </div>
-
-                  <div className="space-y-4">
-                      <div className="flex justify-between items-center font-mono text-[10px] uppercase font-black">
-                          <span className="opacity-50">Occupancy</span>
-                          <span className={occupied === totalUnits ? "text-green-500" : ""}>{occupied}/{totalUnits}</span>
-                      </div>
-                      <div className="w-full h-2 bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-5 overflow-hidden">
-                          <div className="h-full bg-[var(--accent-bg)] transition-all duration-1000" style={{ width: `${(occupied / totalUnits) * 100}%` }} />
+                      <div>
+                          <p className="text-[7px] font-black uppercase opacity-20 mb-1">Total Rent</p>
+                          <p className="text-xl font-black">KES {globalStats.totalExpected.toLocaleString()}</p>
                       </div>
                   </div>
-                </div>
+                  <div className="text-right">
+                      <p className="text-[7px] font-black uppercase opacity-20 mb-1">Paid %</p>
+                      <p className="text-xl font-black text-green-500">{( (globalStats.totalExpected - globalStats.totalA) / globalStats.totalExpected * 100 || 0).toFixed(1)}%</p>
+                  </div>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="h-[400px] border-2 border-dashed border-[var(--border)] border-opacity-10 flex flex-col items-center justify-center space-y-6">
-          <Building2 size={48} className="text-[var(--text-muted)] opacity-20" />
-          <div className="text-center">
-            <h4 className="font-black uppercase text-xl text-[var(--text-base)] tracking-tighter">No Active Assets</h4>
-            <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold mt-1">Your management portfolio is currently empty</p>
           </div>
-          <Link href="/dashboard/manager/properties/new" className="bg-[var(--bg-ghost)] text-[var(--text-base)] border border-[var(--border)] px-8 py-3 font-mono text-[10px] uppercase font-black hover:bg-[var(--accent-bg)] hover:text-[var(--accent-text)] hover:border-[var(--accent-bg)] transition-all">Start Onboarding</Link>
-        </div>
-      )}
+
+          {/* Occupancy Velocity */}
+          <div className="lg:col-span-4 bg-[var(--bg-panel)] p-10 flex flex-col justify-between h-80">
+              <div className="space-y-1">
+                  <p className="text-[8px] font-black uppercase opacity-20 tracking-[0.5em]">Unit Status</p>
+                  <h3 className="text-3xl font-black tracking-tighter uppercase">Occupancy</h3>
+              </div>
+
+              <div className="flex items-center gap-8">
+                  <div className="w-24 h-24 border border-white/10 flex items-center justify-center relative">
+                      <p className="text-xl font-black tracking-tighter">{(globalStats.totalO/globalStats.totalU * 100 || 0).toFixed(0)}%</p>
+                      <div className="absolute inset-0 border border-[var(--accent-bg)] opacity-30" style={{ clipPath: `inset(${100 - (globalStats.totalO/globalStats.totalU * 100 || 0)}% 0 0 0)` }} />
+                  </div>
+                  <div className="space-y-4 font-mono text-[9px] font-black uppercase">
+                      <div className="flex items-center gap-3">
+                          <div className="w-1 h-1 bg-[var(--accent-bg)]" />
+                          <span className="opacity-40">Occupied: {globalStats.totalO}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-red-500">
+                          <div className="w-1 h-1 bg-red-500" />
+                          <span>Vacant: {globalStats.totalU - globalStats.totalO}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-amber-500">
+                          <div className="w-1 h-1 bg-amber-500 animate-pulse" />
+                          <span>Needs Setup: {globalStats.pendingCount}</span>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      {/* FILTER BAR */}
+      <div className="flex flex-col lg:flex-row gap-px bg-white/5 border border-white/5">
+          <div className="flex flex-wrap flex-1 bg-[var(--bg-panel)]">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'pending', label: 'Need Setup' },
+                { id: 'arrears', label: 'In Arrears' },
+                { id: 'occupied', label: 'Full' }
+              ].map(t => (
+                <button 
+                    key={t.id}
+                    onClick={() => setFilter(t.id as any)}
+                    className={`px-10 py-5 text-[8px] font-black uppercase tracking-widest border-r border-white/5 transition-all ${filter === t.id ? 'bg-white/10 opacity-100 shadow-[inset_0_-2px_0_0_var(--accent-bg)]' : 'opacity-20 hover:opacity-100 hover:bg-white/[0.02]'}`}
+                >
+                    {t.label}
+                </button>
+              ))}
+          </div>
+
+          <div className="relative w-full lg:w-96 bg-[var(--bg-panel)] flex items-center">
+              <Search className="absolute left-6 opacity-20" size={14} />
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-transparent py-5 pl-14 pr-6 text-[9px] font-black uppercase tracking-widest outline-none border-none"
+              />
+          </div>
+      </div>
+
+      {/* ASSET GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
+        {filtered.map((p) => (
+            <PropertyCard key={p.id} property={p} />
+        ))}
+      </div>
+
     </div>
   );
 };

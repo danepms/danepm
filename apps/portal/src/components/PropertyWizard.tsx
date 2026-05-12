@@ -5,7 +5,7 @@ import {
   Building2, ArrowRight, Camera, Image as ImageIcon, 
   MapPin, Home, Store, Check, CheckSquare, X, Activity 
 } from 'lucide-react';
-import { createProperty, uploadPropertyImage } from '@/app/actions';
+import { api } from '@/lib/api';
 
 interface PropertyWizardProps {
   onComplete: () => void;
@@ -53,7 +53,7 @@ export const PropertyWizard = ({ onComplete, userId, wizardStep, setWizardStep, 
       try {
         const uploadData = new FormData();
         uploadData.append("photo", file);
-        const result = await uploadPropertyImage(uploadData);
+        const result = await api.post<any>("/properties/upload-image", uploadData);
         if (result.success && result.imageUrl) {
           setFormData((prev: any) => ({ ...prev, imageUrl: result.imageUrl }));
         }
@@ -78,14 +78,18 @@ export const PropertyWizard = ({ onComplete, userId, wizardStep, setWizardStep, 
     if (wizardStep === 2) {
       setIsSaving(true);
       try {
-        const result = await createProperty({
+        const result = await api.post<any>("/properties", {
           name: formData.name,
           location: formData.location,
           userId: userId || "system_admin",
           hasResidential: formData.hasResidential,
           hasCommercial: formData.hasCommercial,
-          residentialUnits: JSON.stringify(formData.residentialUnits),
-          commercialUnits: JSON.stringify(formData.commercialUnits || {}),
+          config: {
+            unitSummaries: {
+              residential: formData.residentialUnits,
+              commercial: formData.commercialUnits || {}
+            }
+          },
           imageUrl: formData.imageUrl
         });
         
@@ -294,7 +298,7 @@ export const PropertyWizard = ({ onComplete, userId, wizardStep, setWizardStep, 
                     <div className="reveal-step">
                       <div className="flex items-center gap-3 mb-6">
                         <Home size={20} className="text-[var(--accent-bg)]" />
-                        <h3 className="font-extrabold uppercase text-lg">Residential Breakdown</h3>
+                        <h3 className="font-extrabold uppercase text-lg">Residential Units</h3>
                       </div>
                       
                       <label className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-4 block font-bold">Select Room Types</label>
@@ -352,7 +356,7 @@ export const PropertyWizard = ({ onComplete, userId, wizardStep, setWizardStep, 
                     <div className="reveal-step pt-4 border-t border-[var(--border)] border-opacity-20">
                       <div className="flex items-center gap-3 mb-6">
                         <Store size={20} className="text-[var(--accent-bg)]" />
-                        <h3 className="font-extrabold uppercase text-lg">Commercial Breakdown</h3>
+                        <h3 className="font-extrabold uppercase text-lg">Commercial Units</h3>
                       </div>
                       
                       <label className="text-[10px] font-mono text-[var(--text-muted)] uppercase mb-4 block font-bold">Select Unit Types</label>

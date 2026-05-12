@@ -409,14 +409,32 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4" style={{ borderTop: '1px solid var(--border)' }}>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-dim)' }}>
-              © {new Date().getFullYear()} Dane Properties Limited · All rights reserved
-            </p>
-            <div className="flex gap-6">
-              {['Privacy', 'Terms'].map(l => (
-                <a key={l} href="#" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>{l}</a>
-              ))}
+          <div className="pt-8 flex flex-col items-center md:items-start gap-6" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="w-full flex flex-col md:flex-row items-center justify-between gap-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-dim)' }}>
+                © {new Date().getFullYear()} Dane Properties Limited · All rights reserved
+              </p>
+              <div className="flex gap-6">
+                <Link href="/privacy" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Privacy</Link>
+                <Link href="/terms" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Terms</Link>
+                <Link href="/cookies" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Cookies</Link>
+              </div>
+            </div>
+            
+            <div className="w-full flex justify-center md:justify-start">
+              <a 
+                href="https://kihumba.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="group flex items-center gap-2 text-[9px] font-mono uppercase tracking-widest text-[var(--text-dim)] hover:text-white transition-all"
+              >
+                <span className="opacity-40">Crafted by</span>
+                <span className="font-bold relative">
+                  Kihumba
+                  <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-[var(--accent)] transition-all group-hover:w-full"></span>
+                </span>
+                <ArrowUpRight size={10} className="opacity-0 -translate-x-2 text-[var(--accent)] group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+              </a>
             </div>
           </div>
         </div>

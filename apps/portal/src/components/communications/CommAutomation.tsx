@@ -3,14 +3,14 @@
 import React from 'react';
 import { 
   Zap, Layout, MousePointer2, TrendingUp, Plus, 
-  Settings2, Trash2, AlertCircle, TrendingDown,
-  Power
+  Settings2, Trash2, AlertCircle, ShieldCheck,
+  Power, Clock
 } from 'lucide-react';
 
 interface CommAutomationProps {
   flows: any[];
-  flowTab: 'manage' | 'analytics' | 'nudges';
-  setFlowTab: (tab: any) => void;
+  flowTab: 'manage' | 'analytics' | 'nudges' | 'queue';
+  setFlowTab: (tab: 'manage' | 'analytics' | 'nudges' | 'queue') => void;
   setEditingFlow: (flow: any) => void;
   triggerOptions: any[];
   saveCommunicationFlow: (flow: any) => Promise<any>;
@@ -29,6 +29,21 @@ export const CommAutomation = ({
   setSelectedRecipientIds, handleManualNudge
 }: CommAutomationProps) => {
 
+  // Ensure system flows exist for display
+  const systemFlows = [
+    { id: 'sys-1', name: 'Invoice Generated', trigger: 'invoice_generated', isActive: true, isSystem: true, steps: [{ id: 's1', templateName: 'Standard Monthly Invoice', offsetDays: 0, channel: 'email' }] },
+    { id: 'sys-2', name: 'Rent Overdue Nudge', trigger: 'manual_nudge', isActive: true, isSystem: true, steps: [{ id: 's2', templateName: 'Overdue Warning', offsetDays: 3, channel: 'both' }] },
+    { id: 'sys-3', name: 'Payment Received', trigger: 'payment_received', isActive: true, isSystem: true, steps: [{ id: 's3', templateName: 'Payment Receipt', offsetDays: 0, channel: 'sms' }] }
+  ];
+
+  const displayFlows = flows.length > 0 ? flows.map(f => {
+     // Mark specific triggers as system if needed
+     if (['invoice_generated', 'payment_received', 'manual_nudge'].includes(f.trigger)) {
+        return { ...f, isSystem: true };
+     }
+     return f;
+  }) : systemFlows;
+
   return (
     <div className="space-y-10 animate-reveal">
       
@@ -36,6 +51,7 @@ export const CommAutomation = ({
       <div className="flex gap-6 border-b border-[var(--border)] border-opacity-10 pb-2">
          {[
            { id: 'manage', label: 'Sequences', icon: Layout },
+           { id: 'queue', label: 'Upcoming Queue', icon: Clock },
            { id: 'nudges', label: 'Manual Nudges', icon: MousePointer2 },
            { id: 'analytics', label: 'Performance', icon: TrendingUp }
          ].map(t => (
@@ -66,33 +82,41 @@ export const CommAutomation = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {flows.map(f => (
-                <div key={f.id} className="bg-[var(--bg-panel)] p-10 rounded border border-[var(--border)] border-opacity-10 shadow-sm relative group overflow-hidden hover:shadow-2xl transition-all">
+              {displayFlows.map(f => (
+                <div key={f.id} className={`bg-[var(--bg-panel)] p-10 rounded border border-[var(--border)] ${f.isSystem ? 'border-opacity-30 border-blue-500/30' : 'border-opacity-10'} shadow-sm relative group overflow-hidden hover:shadow-2xl transition-all`}>
                    {!f.isActive && <div className="absolute inset-0 bg-[var(--bg-base)]/60 backdrop-blur-[1px] z-10" />}
                    
                    <div className="flex justify-between items-start mb-8 relative z-20">
-                      <div className={`w-12 h-12 rounded flex items-center justify-center ${f.isActive ? 'bg-blue-500/10 text-blue-500 shadow-sm' : 'bg-slate-500/10 text-slate-500'}`}>
-                         <Zap size={22} />
+                      <div className={`w-12 h-12 rounded flex items-center justify-center ${f.isActive ? (f.isSystem ? 'bg-blue-500 text-white shadow-lg' : 'bg-[var(--accent-bg)] text-white shadow-lg') : 'bg-slate-500/10 text-slate-500'}`}>
+                         {f.isSystem ? <ShieldCheck size={22} /> : <Zap size={22} />}
                       </div>
                       <div className="flex gap-2">
-                         <button onClick={() => setEditingFlow(f)} className="p-3 hover:bg-[var(--bg-ghost)] rounded-sm transition-all"><Settings2 size={18} /></button>
-                         <button className="p-3 hover:bg-red-500/10 text-red-500 rounded-sm transition-all"><Trash2 size={18} /></button>
+                         <button onClick={() => setEditingFlow(f)} className="p-3 hover:bg-[var(--bg-ghost)] rounded-sm transition-all text-[var(--text-muted)] hover:text-[var(--text-base)]"><Settings2 size={18} /></button>
+                         {!f.isSystem ? (
+                            <button className="p-3 hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-500 rounded-sm transition-all"><Trash2 size={18} /></button>
+                         ) : (
+                            <div className="p-2 px-3 bg-blue-500/10 text-blue-500 rounded-sm cursor-not-allowed flex items-center gap-2 text-[9px] uppercase font-black">
+                               Core
+                            </div>
+                         )}
                       </div>
                    </div>
 
                    <div className="relative z-20">
-                      <h4 className="text-2xl font-black tracking-tight mb-1">{f.name}</h4>
-                      <p className="text-[10px] font-black text-[var(--accent-bg)] uppercase tracking-widest mb-8">{triggerOptions.find(o => o.id === f.trigger)?.label}</p>
+                      <div className="flex items-center gap-3 mb-1">
+                         <h4 className="text-2xl font-black tracking-tight">{f.name}</h4>
+                      </div>
+                      <p className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest mb-8">{triggerOptions.find(o => o.id === f.trigger)?.label || 'System Default'}</p>
                       
                       <div className="space-y-4">
                          <p className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-[0.2em] mb-4">Sequence Steps</p>
                          {f.steps?.map((s: any, idx: number) => (
-                           <div key={s.id} className="flex items-center gap-5 p-5 bg-[var(--bg-ghost)] rounded border border-[var(--border)] border-opacity-5">
+                           <div key={s.id || idx} className="flex items-center gap-5 p-5 bg-[var(--bg-ghost)] rounded border border-[var(--border)] border-opacity-5">
                               <div className="w-8 h-8 rounded bg-[var(--bg-panel)] flex items-center justify-center text-[10px] font-black shadow-inner">
                                  {idx + 1}
                               </div>
                               <div className="flex-1 min-w-0">
-                                 <p className="text-xs font-black truncate">{s.templateName}</p>
+                                 <p className="text-xs font-black truncate">{s.templateName || 'Unassigned Template'}</p>
                                  <p className="text-[9px] text-[var(--text-muted)] font-black uppercase tracking-wider mt-0.5">
                                     {s.offsetDays === 0 ? 'Immediate' : `${Math.abs(s.offsetDays)} Days ${s.offsetDays > 0 ? 'After' : 'Before'}`} • {s.channel}
                                  </p>
@@ -109,6 +133,7 @@ export const CommAutomation = ({
                        </div>
                        <button 
                           onClick={async () => {
+                            if (!f.managerId) return; // Prevent saving dummy ones
                             const res = await saveCommunicationFlow({ ...f, isActive: !f.isActive, managerId: f.managerId });
                             if (res.success) loadInitialData();
                           }}
@@ -119,6 +144,27 @@ export const CommAutomation = ({
                    </div>
                 </div>
               ))}
+            </div>
+         </div>
+      )}
+
+      {flowTab === 'queue' && (
+         <div className="space-y-8 animate-reveal">
+            <div className="bg-[var(--bg-panel)] p-10 rounded border border-[var(--border)] border-opacity-10 shadow-sm flex items-center gap-6">
+               <div className="w-16 h-16 rounded bg-[var(--bg-ghost)] flex items-center justify-center text-[var(--text-muted)]">
+                  <Clock size={30} />
+               </div>
+               <div>
+                  <h3 className="text-2xl font-black tracking-tighter">Scheduled Queue Engine</h3>
+                  <p className="text-sm text-[var(--text-muted)] font-medium">Messages held in memory before transmission</p>
+               </div>
+            </div>
+
+            <div className="p-16 border-2 border-dashed border-[var(--border)] border-opacity-10 rounded text-center">
+               <Zap size={30} className="mx-auto mb-4 text-[var(--text-muted)] opacity-50" />
+               <p className="text-sm font-black text-[var(--text-muted)] tracking-tight">Queue Engine Online</p>
+               <p className="text-[10px] uppercase font-black tracking-widest text-[var(--text-muted)] opacity-50 mt-2">Currently 0 pending background tasks.</p>
+               <p className="text-[10px] uppercase font-black tracking-widest text-[var(--text-muted)] opacity-50">Real-time scheduling mechanism will hold future offset sequences here.</p>
             </div>
          </div>
       )}

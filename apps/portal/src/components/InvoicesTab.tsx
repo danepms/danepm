@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Plus, ChevronDown, ChevronRight, CreditCard, Clock, CheckCircle2, AlertCircle, X, Loader2, Calendar, DollarSign } from 'lucide-react';
-import { getInvoices, generateMonthlyInvoices, recordPayment, getPaymentsForInvoice } from '@/app/actions';
+import { api } from '@/lib/api';
 
 const STATUS_STYLES: Record<string, string> = {
   paid: 'bg-green-500/10 text-green-600 border-green-500/20',
@@ -25,9 +25,24 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
 
   // Modals
   const [showGenerate, setShowGenerate] = useState(false);
+  const [generateTarget, setGenerateTarget] = useState<'property' | 'tenant'>('property');
+  const [selectedProperty, setSelectedProperty] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState('');
   const [generatePeriod, setGeneratePeriod] = useState(new Date().toISOString().slice(0, 7));
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateResult, setGenerateResult] = useState<any>(null);
+
+  const [showManualInvoice, setShowManualInvoice] = useState(false);
+  const [manualData, setManualData] = useState({
+    tenantId: '',
+    propertyId: '',
+    period: new Date().toISOString().slice(0, 7),
+    amount: '',
+    type: 'rent',
+    description: '',
+    dueDate: ''
+  });
+  const [isCreatingManual, setIsCreatingManual] = useState(false);
 
   const [payingInvoice, setPayingInvoice] = useState<any>(null);
   const [paymentData, setPaymentData] = useState({ amount: '', method: 'mpesa', reference: '', notes: '' });
@@ -36,12 +51,22 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
   const [invoicePayments, setInvoicePayments] = useState<any[]>([]);
 
+  const [viewingLedger, setViewingLedger] = useState<any>(null);
+  const [ledgerData, setLedgerData] = useState<any>(null);
+  const [isLedgerLoading, setIsLedgerLoading] = useState(false);
+
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [summary, setSummary] = useState<any>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+
   const fetchInvoices = async (p: number) => {
     setIsLoading(true);
     const filters: any = {};
     if (statusFilter) filters.status = statusFilter;
     if (periodFilter) filters.period = periodFilter;
-    const res = await getInvoices(managerId, p, filters);
+    const res = await api.get<any>(`/finance/invoices?managerId=${managerId}&page=${p}&status=${filters.status || ''}&period=${filters.period || ''}`);
     if (res.success) {
       setInvoices(res.invoices || []);
       setHasMore(res.hasMore || false);
@@ -52,24 +77,71 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
     setIsLoading(false);
   };
 
-  useEffect(() => { fetchInvoices(1); }, [statusFilter, periodFilter]);
+  const fetchSummary = async () => {
+    setIsStatsLoading(true);
+    const res = await api.get<any>(`/finance/reconciliation-summary?managerId=${managerId}`);
+    if (res.success) setSummary(res.summary);
+    setIsStatsLoading(false);
+  };
+
+  useEffect(() => { 
+    fetchInvoices(1); 
+    fetchSummary();
+  }, [statusFilter, periodFilter, managerId]);
+
+  const fetchTenants = async () => {
+    const res = await api.get<any>(`/tenants?managerId=${managerId}&limit=100`);
+    if (res.success) setTenants(res.tenants || []);
+  };
+
+  useEffect(() => { if (showGenerate || showManualInvoice) fetchTenants(); }, [showGenerate, showManualInvoice]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setGenerateResult(null);
-    const res = await generateMonthlyInvoices(managerId, generatePeriod);
+    const res = await api.post<any>("/finance/generate-invoices", { 
+      managerId, 
+      period: generatePeriod,
+      propertyId: generateTarget === 'property' ? selectedProperty : undefined,
+      tenantId: generateTarget === 'tenant' ? selectedTenant : undefined
+    });
     if (res.success) {
       setGenerateResult(res);
       fetchInvoices(1);
+      fetchSummary();
     }
     setIsGenerating(false);
+  };
+
+  const handleCreateManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreatingManual(true);
+    const res = await api.post<any>("/finance/create-invoice", {
+      ...manualData,
+      managerId
+    });
+    if (res.success) {
+      setShowManualInvoice(false);
+      setManualData({
+        tenantId: '',
+        propertyId: '',
+        period: new Date().toISOString().slice(0, 7),
+        amount: '',
+        type: 'rent',
+        description: '',
+        dueDate: ''
+      });
+      fetchInvoices(1);
+      fetchSummary();
+    }
+    setIsCreatingManual(false);
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payingInvoice) return;
     setIsRecording(true);
-    const res = await recordPayment({
+    const res = await api.post<any>("/finance/reconcile", {
       invoiceId: payingInvoice.id,
       tenantId: payingInvoice.tenantId,
       managerId,
@@ -82,8 +154,16 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
       setPayingInvoice(null);
       setPaymentData({ amount: '', method: 'mpesa', reference: '', notes: '' });
       fetchInvoices(page);
+      fetchSummary();
     }
     setIsRecording(false);
+  };
+
+  const fetchLedger = async (tenantId: string) => {
+    setIsLedgerLoading(true);
+    const res = await api.get<any>(`/finance/tenant-ledger?tenantId=${tenantId}&managerId=${managerId}`);
+    if (res.success) setLedgerData(res);
+    setIsLedgerLoading(false);
   };
 
   const handleExpandInvoice = async (inv: any) => {
@@ -92,7 +172,7 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
       return;
     }
     setExpandedInvoice(inv.id);
-    const res = await getPaymentsForInvoice(inv.id);
+    const res = await api.get<any>(`/finance/invoices/${inv.id}/payments`);
     if (res.success) setInvoicePayments(res.payments || []);
   };
 
@@ -101,6 +181,11 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
     try { return new Date(p + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); } catch { return p; }
   };
 
+  const filteredTenants = tenants.filter(t => 
+    t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    t.phone.includes(searchTerm)
+  );
+
   return (
     <div className="space-y-10 animate-reveal">
       {/* HEADER */}
@@ -108,23 +193,42 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
         <div>
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-none">Invoices</h2>
           <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-[0.2em] mt-3">
-            Monthly rent billing for all your tenants
+            Revenue Terminal :: Fiscal Period {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {lastGenerated && (
-            <div className="text-right hidden md:block">
-              <p className="font-mono text-[7px] uppercase font-black opacity-30">Last Generated</p>
-              <p className="font-mono text-[10px] font-bold">{formatPeriod(lastGenerated.period)} · {formatDate(lastGenerated.date)}</p>
-            </div>
-          )}
           <button
             onClick={() => { setShowGenerate(true); setGenerateResult(null); }}
+            className="border border-[var(--border)] border-opacity-20 px-6 py-4 font-mono text-[11px] uppercase font-black hover:bg-[var(--bg-ghost)] transition-all rounded-xl"
+          >
+            Bulk Generation
+          </button>
+          <button
+            onClick={() => setShowManualInvoice(true)}
             className="bg-[var(--text-base)] text-[var(--bg-panel)] px-8 py-4 font-mono text-[11px] uppercase font-black hover:translate-y-[-2px] active:translate-y-0 transition-all flex items-center gap-3 shadow-[8px_8px_0px_0px_var(--shadow-color)] rounded-xl"
           >
-            <Plus size={16} /> Generate Invoices
+            <Plus size={16} /> Create Invoice
           </button>
         </div>
+      </div>
+
+      {/* STATS STRIP */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Billed', value: summary?.expected || 0, color: 'text-[var(--text-base)]' },
+          { label: 'Collected', value: summary?.collected || 0, color: 'text-emerald-500' },
+          { label: 'Outstanding', value: summary?.outstanding || 0, color: 'text-red-500' },
+          { label: 'Collection Rate', value: `${summary?.collectionRate || 0}%`, color: 'text-amber-500' }
+        ].map((stat, i) => (
+          <div key={i} className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-6 rounded-2xl shadow-[4px_4px_0px_0px_var(--shadow-color)]">
+             <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-2 flex items-center gap-2">
+                <Calendar size={10} /> {stat.label}
+             </p>
+             <h3 className={`text-2xl font-black tracking-tighter ${stat.color}`}>
+                {isStatsLoading ? '...' : (typeof stat.value === 'number' ? `KES ${stat.value.toLocaleString()}` : stat.value)}
+             </h3>
+          </div>
+        ))}
       </div>
 
       {/* FILTERS */}
@@ -149,11 +253,11 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
             <tr>
               <th className="p-5 uppercase font-black tracking-widest opacity-50">Tenant</th>
               <th className="p-5 uppercase font-black tracking-widest opacity-50">Period</th>
+              <th className="p-5 uppercase font-black tracking-widest opacity-50">Type</th>
               <th className="p-5 uppercase font-black tracking-widest opacity-50">Amount</th>
-              <th className="p-5 uppercase font-black tracking-widest opacity-50">Paid</th>
               <th className="p-5 uppercase font-black tracking-widest opacity-50">Balance</th>
               <th className="p-5 uppercase font-black tracking-widest opacity-50">Status</th>
-              <th className="p-5 uppercase font-black tracking-widest opacity-50">Action</th>
+              <th className="p-5 uppercase font-black tracking-widest opacity-50 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)] divide-opacity-5">
@@ -169,21 +273,27 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
                     <div className="text-[8px] opacity-40 mt-0.5">{inv.propertyName} · {inv.unitId}</div>
                   </td>
                   <td className="p-5 font-bold opacity-70">{formatPeriod(inv.period)}</td>
+                  <td className="p-5 uppercase font-black opacity-40">{inv.type || 'rent'}</td>
                   <td className="p-5 font-black">KES {parseFloat(inv.amount).toLocaleString()}</td>
-                  <td className="p-5 font-bold text-green-600">KES {parseFloat(inv.paid || '0').toLocaleString()}</td>
                   <td className="p-5 font-black text-red-500">KES {parseFloat(inv.balance).toLocaleString()}</td>
                   <td className="p-5">
                     <span className={`px-3 py-1 rounded-full text-[8px] uppercase font-black border ${STATUS_STYLES[inv.status] || ''}`}>
                       {inv.status}
                     </span>
                   </td>
-                  <td className="p-5">
+                  <td className="p-5 text-right space-x-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setViewingLedger(inv.tenantId); fetchLedger(inv.tenantId); }}
+                      className="px-3 py-1.5 border border-[var(--border)] border-opacity-10 rounded-lg font-black text-[8px] uppercase hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all"
+                    >
+                      Ledger
+                    </button>
                     {inv.status !== 'paid' && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setPayingInvoice(inv); setPaymentData({ ...paymentData, amount: inv.balance }); }}
-                        className="px-4 py-2 bg-green-500/10 text-green-600 border border-green-500/20 rounded-lg font-black text-[8px] uppercase hover:bg-green-500 hover:text-white transition-all"
+                        className="px-3 py-1.5 bg-green-500/10 text-green-600 border border-green-500/20 rounded-lg font-black text-[8px] uppercase hover:bg-green-500 hover:text-white transition-all"
                       >
-                        Record Payment
+                        Pay
                       </button>
                     )}
                   </td>
@@ -215,11 +325,6 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
                           ))}
                         </div>
                       )}
-                      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[var(--border)] border-opacity-5">
-                        <span className="font-mono text-[8px] opacity-30">Due: {formatDate(inv.dueDate)}</span>
-                        <span className="font-mono text-[8px] opacity-30">Issued: {formatDate(inv.issuedAt)}</span>
-                        <span className="font-mono text-[8px] opacity-30">📞 {inv.tenantPhone}</span>
-                      </div>
                     </td>
                   </tr>
                 )}
@@ -243,49 +348,194 @@ export const InvoicesTab = ({ managerId, properties }: { managerId: string; prop
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
           <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-lg rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] overflow-hidden">
             <div className="p-8 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center">
-              <h3 className="text-2xl font-black uppercase tracking-tighter">Generate Invoices</h3>
+              <h3 className="text-2xl font-black uppercase tracking-tighter">Bulk Generate</h3>
               <button onClick={() => setShowGenerate(false)}><X size={20} /></button>
             </div>
-            <div className="p-10 space-y-8">
-              <div className="space-y-3">
-                <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest flex items-center gap-2">
-                  <Calendar size={10} /> Billing Period
-                </label>
-                <input type="month" value={generatePeriod} onChange={e => setGeneratePeriod(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black outline-none" />
-                <p className="font-mono text-[8px] opacity-40">One invoice per tenant based on their unit's rent. Tenants who already have an invoice for this period will be skipped.</p>
+            <div className="p-10 space-y-6">
+              <div className="flex gap-2 p-1 bg-[var(--bg-ghost)] rounded-xl">
+                <button onClick={() => setGenerateTarget('property')} className={`flex-1 py-3 rounded-lg font-mono text-[9px] uppercase font-black transition-all ${generateTarget === 'property' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'opacity-40'}`}>Entire Property</button>
+                <button onClick={() => setGenerateTarget('tenant')} className={`flex-1 py-3 rounded-lg font-mono text-[9px] uppercase font-black transition-all ${generateTarget === 'tenant' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'opacity-40'}`}>Single Person</button>
               </div>
 
-              {generateResult && (
-                <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 space-y-2 animate-reveal">
-                  <p className="font-mono text-[10px] font-black text-green-600 uppercase">Generation Complete</p>
-                  <div className="grid grid-cols-3 gap-4 mt-3">
-                    <div>
-                      <p className="font-mono text-[7px] uppercase opacity-40">Created</p>
-                      <p className="text-xl font-black text-green-600">{generateResult.created}</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[7px] uppercase opacity-40">Skipped</p>
-                      <p className="text-xl font-black opacity-40">{generateResult.skipped}</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-[7px] uppercase opacity-40">Total</p>
-                      <p className="text-xl font-black">KES {generateResult.totalAmount?.toLocaleString()}</p>
-                    </div>
+              <div className="space-y-3">
+                <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Billing Period</label>
+                <input type="month" value={generatePeriod} onChange={e => setGeneratePeriod(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black outline-none" />
+              </div>
+
+              {generateTarget === 'property' ? (
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Select Property</label>
+                  <select value={selectedProperty} onChange={e => setSelectedProperty(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none appearance-none">
+                    <option value="">All Properties</option>
+                    {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Search Tenant</label>
+                  <input type="text" placeholder="Name or Phone..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none" />
+                  <div className="max-h-40 overflow-y-auto border border-[var(--border)] border-opacity-10 rounded-xl">
+                    {filteredTenants.map(t => (
+                      <button key={t.id} onClick={() => setSelectedTenant(t.id)} className={`w-full text-left p-4 font-mono text-[10px] border-b border-[var(--border)] border-opacity-5 hover:bg-[var(--bg-ghost)] ${selectedTenant === t.id ? 'bg-green-500/10 border-l-4 border-l-green-500' : ''}`}>
+                        <div className="font-black">{t.name}</div>
+                        <div className="opacity-40">{t.phone} · {t.unitId}</div>
+                      </button>
+                    ))}
                   </div>
+                </div>
+              )}
+
+              {generateResult && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 space-y-2">
+                  <p className="font-mono text-[10px] font-black text-green-600 uppercase">Success</p>
+                  <p className="font-mono text-[9px]">Created {generateResult.created} invoices. Skipped {generateResult.skipped}.</p>
                 </div>
               )}
             </div>
             <div className="p-8 bg-[var(--bg-ghost)] flex gap-4">
-              <button onClick={() => setShowGenerate(false)} className="px-8 py-4 border border-[var(--border)] border-opacity-10 rounded-xl font-mono text-[10px] uppercase font-black hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all">Close</button>
-              <button onClick={handleGenerate} disabled={isGenerating} className="flex-1 bg-[var(--accent-bg)] text-[var(--accent-text)] py-4 rounded-xl font-mono text-[10px] uppercase font-black hover:translate-y-[-2px] transition-all flex items-center justify-center gap-3 disabled:opacity-50">
-                {isGenerating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : <>Generate for {formatPeriod(generatePeriod)}</>}
+              <button onClick={handleGenerate} disabled={isGenerating || (generateTarget === 'tenant' && !selectedTenant)} className="flex-1 bg-[var(--text-base)] text-[var(--bg-panel)] py-4 rounded-xl font-mono text-[10px] uppercase font-black hover:translate-y-[-2px] transition-all flex items-center justify-center gap-3 disabled:opacity-50">
+                {isGenerating ? <Loader2 size={14} className="animate-spin" /> : 'Run Batch Generation'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* PAYMENT MODAL */}
+      {/* MANUAL INVOICE MODAL */}
+      {showManualInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
+          <form onSubmit={handleCreateManual} className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-xl rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] overflow-hidden">
+            <div className="p-8 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center">
+              <h3 className="text-2xl font-black uppercase tracking-tighter">Manual Invoice</h3>
+              <button type="button" onClick={() => setShowManualInvoice(false)}><X size={20} /></button>
+            </div>
+            <div className="p-10 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-3">
+                <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Recipient</label>
+                <input type="text" placeholder="Search by name or phone..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none" />
+                <div className="max-h-32 overflow-y-auto border border-[var(--border)] border-opacity-10 rounded-xl">
+                  {filteredTenants.map(t => (
+                    <button key={t.id} type="button" onClick={() => setManualData({...manualData, tenantId: t.id, propertyId: t.propertyId})} className={`w-full text-left p-4 font-mono text-[10px] border-b border-[var(--border)] border-opacity-5 hover:bg-[var(--bg-ghost)] ${manualData.tenantId === t.id ? 'bg-green-500/10 border-l-4 border-l-green-500' : ''}`}>
+                      <div className="font-black">{t.name}</div>
+                      <div className="opacity-40">{t.unitId} · {t.phone}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Type</label>
+                  <select required value={manualData.type} onChange={e => setManualData({...manualData, type: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none appearance-none">
+                    <option value="rent">Rent</option>
+                    <option value="penalty">Penalty</option>
+                    <option value="utility">Utility / Water</option>
+                    <option value="deposit">Security Deposit</option>
+                    <option value="other">Other Charge</option>
+                  </select>
+                </div>
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Amount (KES)</label>
+                  <input required type="number" value={manualData.amount} onChange={e => setManualData({...manualData, amount: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-lg font-black outline-none" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Period</label>
+                  <input required type="month" value={manualData.period} onChange={e => setManualData({...manualData, period: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none" />
+                </div>
+                <div className="space-y-3">
+                  <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Due Date</label>
+                  <input type="date" value={manualData.dueDate} onChange={e => setManualData({...manualData, dueDate: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Description</label>
+                <input required type="text" placeholder="e.g. Water bill for Unit A1" value={manualData.description} onChange={e => setManualData({...manualData, description: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-xs font-black outline-none" />
+              </div>
+            </div>
+            <div className="p-8 bg-[var(--bg-ghost)] flex gap-4">
+              <button type="submit" disabled={isCreatingManual || !manualData.tenantId} className="flex-1 bg-[var(--text-base)] text-[var(--bg-panel)] py-4 rounded-xl font-mono text-[10px] uppercase font-black hover:translate-y-[-2px] transition-all flex items-center justify-center gap-3 disabled:opacity-50">
+                {isCreatingManual ? <Loader2 size={14} className="animate-spin" /> : 'Create Invoice'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* LEDGER MODAL */}
+      {viewingLedger && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-4xl rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-black uppercase tracking-tighter">Tenant Ledger</h3>
+                <p className="font-mono text-[9px] opacity-40 uppercase font-black">Forensic breakdown of all financial activities</p>
+              </div>
+              <button onClick={() => setViewingLedger(null)}><X size={20} /></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+              {isLedgerLoading ? (
+                <div className="h-60 flex items-center justify-center font-mono text-sm uppercase font-black opacity-20">Loading ledger data...</div>
+              ) : ledgerData ? (
+                <>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="bg-[var(--bg-ghost)] p-6 rounded-2xl border border-[var(--border)] border-opacity-10">
+                      <p className="font-mono text-[8px] uppercase font-black opacity-40">Total Invoiced</p>
+                      <p className="text-2xl font-black mt-1">KES {ledgerData.invoices.reduce((acc: number, curr: any) => acc + parseFloat(curr.amount), 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-[var(--bg-ghost)] p-6 rounded-2xl border border-[var(--border)] border-opacity-10">
+                      <p className="font-mono text-[8px] uppercase font-black opacity-40 text-green-600">Total Paid</p>
+                      <p className="text-2xl font-black mt-1 text-green-600">KES {ledgerData.payments.reduce((acc: number, curr: any) => acc + parseFloat(curr.amount), 0).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-[var(--bg-ghost)] p-6 rounded-2xl border border-[var(--border)] border-opacity-10 border-red-500/20">
+                      <p className="font-mono text-[8px] uppercase font-black opacity-40 text-red-500">Current Arrears</p>
+                      <p className="text-2xl font-black mt-1 text-red-500">KES {ledgerData.invoices.reduce((acc: number, curr: any) => acc + parseFloat(curr.balance), 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <h4 className="font-black uppercase tracking-widest text-[10px] opacity-40 border-b border-[var(--border)] border-opacity-10 pb-4">Activity Stream</h4>
+                    <div className="space-y-4">
+                      {[...ledgerData.invoices.map((i: any) => ({...i, entryType: 'invoice'})), ...ledgerData.payments.map((p: any) => ({...p, entryType: 'payment', issuedAt: p.recordedAt}))]
+                        .sort((a: any, b: any) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime())
+                        .map((entry: any, idx: number) => (
+                          <div key={idx} className={`flex items-center justify-between p-5 rounded-2xl border ${entry.entryType === 'invoice' ? 'border-[var(--border)] border-opacity-10 bg-[var(--bg-panel)]' : 'border-green-500/20 bg-green-500/5'}`}>
+                            <div className="flex items-center gap-5">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${entry.entryType === 'invoice' ? 'bg-[var(--bg-ghost)] text-[var(--text-base)]' : 'bg-green-500 text-white'}`}>
+                                {entry.entryType === 'invoice' ? <Receipt size={18} /> : <DollarSign size={18} />}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-3">
+                                  <p className="font-black text-sm uppercase tracking-tight">{entry.entryType === 'invoice' ? entry.description : 'Payment Received'}</p>
+                                  <span className="font-mono text-[8px] px-2 py-0.5 rounded-full bg-[var(--border)] bg-opacity-10 uppercase font-black opacity-50">{entry.type || entry.method}</span>
+                                </div>
+                                <p className="font-mono text-[9px] opacity-40 mt-1">{formatDate(entry.issuedAt)} {entry.reference ? `· Ref: ${entry.reference}` : ''}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-black text-sm ${entry.entryType === 'invoice' ? 'text-red-500' : 'text-green-600'}`}>
+                                {entry.entryType === 'invoice' ? `+ KES ${parseFloat(entry.amount).toLocaleString()}` : `- KES ${parseFloat(entry.amount).toLocaleString()}`}
+                              </p>
+                              {entry.entryType === 'invoice' && entry.balance !== entry.amount && (
+                                <p className="font-mono text-[8px] opacity-40 mt-1">Bal: KES {parseFloat(entry.balance).toLocaleString()}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAYMENT MODAL (RESTORED) */}
       {payingInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
           <form onSubmit={handleRecordPayment} className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-lg rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] overflow-hidden">

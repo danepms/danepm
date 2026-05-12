@@ -3,7 +3,9 @@
 import React, { useState } from 'react';
 import { Plus, X, Building2 } from 'lucide-react';
 import { AddTenantModal } from './AddTenantModal';
-import { updateTenantAssignment } from '@/app/actions';
+import { MoveOutModal } from './MoveOutModal';
+import { MoveTenantModal } from './MoveTenantModal';
+import { parseConfig } from '@/lib/utils';
 
 interface TenantsTabProps {
   tenants: any[];
@@ -30,13 +32,21 @@ export const TenantsTab = ({
 }: TenantsTabProps) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [movingTenant, setMovingTenant] = useState<any>(null);
+  const [archivingTenant, setArchivingTenant] = useState<any>(null);
 
-  const handleMoveTenant = async (propertyId: string, unitId: string) => {
-    if (!movingTenant) return;
-    const res = await updateTenantAssignment(movingTenant.id, propertyId, unitId);
-    if (res.success) {
-      setMovingTenant(null);
-      onRefresh();
+  const resolveUnitName = (propertyId: string, unitId: string) => {
+    if (!unitId) return 'NONE';
+    if (!unitId.startsWith('U_')) return unitId; // Already a friendly name
+    
+    const prop = properties.find(p => p.id === propertyId);
+    if (!prop || !prop.config) return unitId;
+    
+    try {
+        const config = parseConfig(prop.config);
+        const unit = config.units?.find((u: any) => u.id === unitId || u.name === unitId);
+        return unit?.name || unitId;
+    } catch (e) {
+        return unitId;
     }
   };
 
@@ -45,19 +55,19 @@ export const TenantsTab = ({
       {/* TENANT STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-8 rounded-xl shadow-[8px_8px_0px_0px_var(--shadow-color)]">
         <div>
-            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Total People</p>
+            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Total Tenants</p>
             <p className="text-2xl font-black tracking-tighter">{stats?.total || 0}</p>
         </div>
         <div>
-            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">With Arrears</p>
+            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Overdue</p>
             <p className="text-2xl font-black tracking-tighter text-red-500">{stats?.withArrearsCount || 0}</p>
         </div>
         <div>
-            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Total Owed</p>
+            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Owed</p>
             <p className="text-2xl font-black tracking-tighter">KES {stats?.arrearsSum?.toLocaleString() || 0}</p>
         </div>
         <div>
-            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Health Index</p>
+            <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Status</p>
             <p className="text-2xl font-black tracking-tighter text-[var(--accent-bg)]">98%</p>
         </div>
       </div>
@@ -91,7 +101,7 @@ export const TenantsTab = ({
               </thead>
               <tbody className="divide-y divide-[var(--border)] divide-opacity-5">
                   {isLoading ? (
-                      <tr><td colSpan={6} className="p-20 text-center uppercase font-black opacity-20 animate-pulse">Accessing tenant records...</td></tr>
+                      <tr><td colSpan={6} className="p-20 text-center uppercase font-black opacity-20 animate-pulse">Loading...</td></tr>
                   ) : tenants.length > 0 ? tenants.map((t) => (
                       <tr key={t.id} className="hover:bg-[var(--bg-ghost)] transition-colors group">
                           <td className="p-6 font-black text-xs tracking-tighter">
@@ -100,21 +110,33 @@ export const TenantsTab = ({
                           </td>
                           <td className="p-6 opacity-60 font-bold">{t.phone}</td>
                           <td className="p-6 opacity-60 font-bold uppercase">{t.propertyName || 'Unassigned'}</td>
-                          <td className="p-6 font-black uppercase text-[var(--accent-bg)]">{t.unitId || 'NONE'}</td>
+                          <td className="p-6 font-black uppercase text-[var(--accent-bg)]">{resolveUnitName(t.propertyId, t.unitId)}</td>
                           <td className="p-6 font-black tracking-tighter text-red-500">KES {parseFloat(t.arrears).toLocaleString()}</td>
                           <td className="p-6">
                               <div className="flex gap-2">
                                   <button 
+                                    onClick={() => window.location.href = `/dashboard/manager/tenants/${t.id}`}
+                                    className="px-4 py-2 bg-[var(--text-base)] text-[var(--bg-panel)] rounded-lg hover:bg-[var(--accent-bg)] hover:text-white transition-all font-black uppercase text-[8px]"
+                                  >
+                                      Profile
+                                  </button>
+                                  <button 
                                     onClick={() => setMovingTenant(t)}
                                     className="px-4 py-2 border border-[var(--border)] border-opacity-10 rounded-lg hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all font-black uppercase text-[8px]"
                                   >
-                                      Move
+                                      Relocate
+                                  </button>
+                                  <button 
+                                    onClick={() => setArchivingTenant(t)}
+                                    className="px-4 py-2 bg-red-500 bg-opacity-10 text-red-500 border border-red-500 border-opacity-20 rounded-lg hover:bg-red-500 hover:text-white transition-all font-black uppercase text-[8px]"
+                                  >
+                                      Move Out
                                   </button>
                               </div>
                           </td>
                       </tr>
                   )) : (
-                      <tr><td colSpan={6} className="p-20 text-center uppercase font-black opacity-20">No active tenants found in database</td></tr>
+                      <tr><td colSpan={6} className="p-20 text-center uppercase font-black opacity-20">No tenants found</td></tr>
                   )}
               </tbody>
           </table>
@@ -147,42 +169,20 @@ export const TenantsTab = ({
         properties={properties}
       />
 
-      {/* MOVE TENANT MODAL */}
-      {movingTenant && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
-              <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-xl rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] overflow-hidden">
-                  <div className="p-8 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center">
-                      <h3 className="text-3xl font-black uppercase tracking-tighter text-[var(--text-base)]">Move: {movingTenant.name}</h3>
-                      <button onClick={() => setMovingTenant(null)}><X size={24} /></button>
-                  </div>
-                  <div className="p-10 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                      {properties.map(p => {
-                          const config = JSON.parse(p.config || '{}');
-                          const units = config.units || [];
-                          return (
-                              <div key={p.id} className="space-y-4">
-                                  <div className="flex items-center gap-4 bg-[var(--bg-ghost)] p-4 border border-[var(--border)] border-opacity-10 rounded-xl shadow-[4px_4px_0px_0px_var(--shadow-color)]">
-                                      <Building2 size={16} />
-                                      <span className="font-black uppercase tracking-tighter">{p.name}</span>
-                                  </div>
-                                  <div className="grid grid-cols-4 gap-2">
-                                      {units.map((u: any) => (
-                                          <button 
-                                            key={u.id}
-                                            onClick={() => handleMoveTenant(p.id, u.name)}
-                                            className="p-3 border border-[var(--border)] border-opacity-10 rounded-lg font-black text-[9px] uppercase tracking-tighter hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all shadow-[2px_2px_0px_0px_var(--shadow-color)]"
-                                          >
-                                              {u.name}
-                                          </button>
-                                      ))}
-                                  </div>
-                              </div>
-                          );
-                      })}
-                  </div>
-              </div>
-          </div>
-      )}
+      <MoveTenantModal 
+        show={!!movingTenant}
+        onClose={() => setMovingTenant(null)}
+        onSuccess={onRefresh}
+        tenant={movingTenant}
+        properties={properties}
+      />
+      <MoveOutModal 
+        show={!!archivingTenant}
+        onClose={() => setArchivingTenant(null)}
+        onSuccess={onRefresh}
+        tenant={archivingTenant}
+        managerId={managerId}
+      />
     </div>
   );
 };

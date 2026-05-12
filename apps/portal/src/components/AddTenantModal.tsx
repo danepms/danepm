@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Plus, User, Phone, Mail, IdCard, Calendar, FileText, ChevronRight, Check, Coins, Building2, Users, Camera, Image as ImageIcon, Loader2, Trash2, AlertCircle } from 'lucide-react';
-import { createTenant, uploadTenantPhoto } from '@/app/actions';
+import { api } from '@/lib/api';
+import { parseConfig } from '@/lib/utils';
 
 interface AddTenantModalProps {
     show: boolean;
@@ -10,9 +11,10 @@ interface AddTenantModalProps {
     onSuccess: () => void;
     managerId: string;
     properties: any[];
+    initialUnitId?: string;
 }
 
-export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties }: AddTenantModalProps) => {
+export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties, initialUnitId }: AddTenantModalProps) => {
     const [step, setStep] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({
@@ -21,13 +23,24 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
         email: '',
         idNumber: '',
         idType: 'National ID',
-        propertyId: '',
-        unitId: '',
+        propertyId: properties[0]?.id || '',
+        unitId: initialUnitId || '',
         moveInDate: new Date().toISOString().split('T')[0],
         notes: '',
         kin: [{ name: '', phone: '', relationship: '' }],
-        moveInPhotos: [] as string[]
+        moveInPhotos: [] as string[],
+        deposit: "0",
+        otherMoveInFees: "0",
+        totalCharges: "0",
+        selectedRecurringIds: [] as string[],
+        selectedTypeId: ''
     });
+
+    useEffect(() => {
+        if (initialUnitId && show) {
+            setFormData(prev => ({ ...prev, unitId: initialUnitId }));
+        }
+    }, [initialUnitId, show]);
 
     const [isUploading, setIsUploading] = useState(false);
     const [uploadingQueue, setUploadingQueue] = useState<{id: string, name: string, progress: number}[]>([]);
@@ -37,41 +50,77 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
 
     // Update units when property changes
     useEffect(() => {
-        if (formData.propertyId) {
-            const prop = properties.find(p => p.id === formData.propertyId);
+        let currentPropId = formData.propertyId;
+        if (properties.length === 1 && !currentPropId) {
+            currentPropId = properties[0].id;
+            setFormData(prev => ({ ...prev, propertyId: currentPropId }));
+        }
+
+        if (currentPropId) {
+            const prop = properties.find(p => p.id === currentPropId);
             if (prop && prop.config) {
-                const config = JSON.parse(prop.config);
+                const config = parseConfig(prop.config);
                 const vacantUnits = config.units?.filter((u: any) => u.status === 'vacant') || [];
                 setAvailableUnits(vacantUnits);
                 
-                // Also reset unit if it's not in the new list
-                if (!vacantUnits.find((u: any) => u.name === formData.unitId)) {
-                    setFormData(prev => ({ ...prev, unitId: '' }));
-                }
+                // Pre-select ALL recurring fees by default
+                const recurringIds = (config.recurring || []).map((r: any) => r.id);
+                setFormData(prev => ({ 
+                    ...prev, 
+                    selectedRecurringIds: recurringIds,
+                    // Also reset unit if it's not in the new list
+                    unitId: vacantUnits.find((u: any) => u.name === prev.unitId) ? prev.unitId : (initialUnitId || '')
+                }));
             }
         } else {
             setAvailableUnits([]);
             setFormData(prev => ({ ...prev, unitId: '' }));
         }
-    }, [formData.propertyId, properties]);
+    }, [formData.propertyId, properties, initialUnitId]);
 
-    // Calculate charges when unit changes
+    // Calculate charges when unit or fees change
     useEffect(() => {
         if (formData.propertyId && formData.unitId) {
             const prop = properties.find(p => p.id === formData.propertyId);
             if (prop && prop.config) {
-                const config = JSON.parse(prop.config);
+                const config = parseConfig(prop.config);
                 const unit = config.units?.find((u: any) => u.name === formData.unitId);
                 if (unit) {
-                    const baseRent = config.rents?.[unit.typeId] || 0;
-                    const rent = typeof baseRent === 'object' ? (parseFloat(baseRent.min) || 0) : (parseFloat(baseRent) || 0);
-                    setCalculatedCharges((rent * 2).toString());
+                    // 1. Get Base Rent (Source of Truth)
+                    let rent = parseFloat(unit.rent?.toString() || "0") || 0;
+                    
+                    // Fallback to category price matrix if unit rent is missing
+                    if (rent === 0) {
+                        const typeId = unit.typeId || unit.type || formData.selectedTypeId;
+                        const baseRentVal = config.rents?.[typeId] || 0;
+                        rent = Array.isArray(baseRentVal) ? (parseFloat(baseRentVal[0]) || 0) : 
+                               (typeof baseRentVal === 'object' ? (parseFloat(baseRentVal.min) || 0) : (parseFloat(baseRentVal) || 0));
+                    }
+                    
+                    // 2. Calculate Move-in Fees (Step 3 Rules)
+                    const moveInFeesSum = (config.oneTime || []).reduce((acc: number, item: any) => {
+                        if (!item.mode || item.mode === 'rent_multiple') {
+                            const multiple = parseFloat(item.multiple?.toString() || "1") || 1;
+                            return acc + (rent * multiple);
+                        }
+                        return acc + (parseFloat(item.amount?.toString() || "0") || 0);
+                    }, 0);
+
+                    // 3. Get Recurring Fees (Step 2 Rules)
+                    const recurringSum = (config.recurring || [])
+                        .filter((r: any) => formData.selectedRecurringIds.includes(r.id))
+                        .reduce((acc: number, item: any) => acc + (parseFloat(item.amount?.toString() || "0") || 0), 0);
+                    
+                    const total = rent + moveInFeesSum + recurringSum;
+                    setCalculatedCharges(total.toString());
+                    setFormData(prev => ({ ...prev, totalCharges: total.toString() }));
                 }
             }
         } else {
             setCalculatedCharges("0");
+            setFormData(prev => ({ ...prev, totalCharges: "0" }));
         }
-    }, [formData.unitId, formData.propertyId, properties]);
+    }, [formData.unitId, formData.propertyId, formData.selectedRecurringIds, properties]);
 
     const handleAddKin = () => {
         if (formData.kin.length < 3) {
@@ -123,7 +172,7 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
             try {
                 const formDataUpload = new FormData();
                 formDataUpload.append('photo', file);
-                const res = await uploadTenantPhoto(formDataUpload);
+                const res = await api.post<any>("/tenants/upload-photo", formDataUpload);
                 
                 clearInterval(progressInterval);
 
@@ -147,31 +196,63 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
         setFormData({ ...formData, moveInPhotos: formData.moveInPhotos.filter(p => p !== url) });
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async () => {
+        // CRITICAL: Prevent saving if we aren't at the end
+        if (step < 4) {
+            setStep(prev => prev + 1);
+            return;
+        }
+
         setIsSaving(true);
         
         try {
             const validKin = formData.kin.filter(k => k.name && k.phone);
-            const res = await createTenant({
+            
+            const submissionData = {
                 ...formData,
+                totalCharges: calculatedCharges,
                 nextOfKin: JSON.stringify(validKin),
                 moveInPhotos: JSON.stringify(formData.moveInPhotos),
                 managerId
-            });
+            };
+
+            const res = await api.post<any>("/tenants", submissionData);
 
             if (res.success) {
                 onSuccess();
                 onClose();
             }
         } catch (error) {
-            console.error(error);
+            console.error("Submission Error:", error);
         } finally {
             setIsSaving(false);
         }
     };
 
     if (!show) return null;
+
+    const property = properties[0];
+    let isFull = false;
+    if (property && property.config) {
+        const config = parseConfig(property.config);
+        const vacantUnits = config.units?.filter((u: any) => u.status === 'vacant') || [];
+        isFull = vacantUnits.length === 0;
+    }
+
+    if (isFull) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
+                <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-lg p-10 rounded-3xl shadow-[32px_32px_0px_0px_var(--shadow-color)] text-center">
+                    <div className="w-16 h-16 bg-red-500 bg-opacity-10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <AlertCircle size={32} />
+                    </div>
+                    <h3 className="text-2xl font-black uppercase mb-4">Property is Full</h3>
+                    <p className="font-mono text-xs text-[var(--text-muted)] uppercase mb-8">You cannot add a new tenant since this property currently has no vacant units available.</p>
+                    <button onClick={onClose} className="w-full bg-[var(--text-base)] text-[var(--bg-panel)] py-4 rounded-xl font-mono text-[10px] uppercase font-black hover:translate-y-[-2px] transition-all shadow-md">Close & Go Back</button>
+                </div>
+            </div>
+        );
+    }
 
     const relationshipSuggestions = ["Spouse", "Parent", "Sibling", "Friend", "Guardian"];
 
@@ -185,16 +266,16 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                         <div className="w-12 h-12 bg-[var(--accent-bg)] text-[var(--accent-text)] flex items-center justify-center mb-10 rounded-xl">
                             <User size={24} />
                         </div>
-                        <h3 className="text-3xl font-black uppercase tracking-tighter text-[var(--bg-panel)] leading-none mb-4">Onboarding</h3>
-                        <p className="font-mono text-[10px] text-[var(--bg-panel)] opacity-40 uppercase font-black tracking-widest leading-relaxed">Adding a new person to your community ledger</p>
+                        <h3 className="text-3xl font-black uppercase tracking-tighter text-[var(--bg-panel)] leading-none mb-4">New Tenant</h3>
+                        <p className="font-mono text-[10px] text-[var(--bg-panel)] opacity-40 uppercase font-black tracking-widest leading-relaxed">Adding a new tenant to your property</p>
                     </div>
 
                     <div className="hidden md:block space-y-6">
                         {[
-                            { step: 1, label: "Identity", icon: <IdCard size={14} /> },
-                            { step: 2, label: "Placement", icon: <Building2 size={14} /> },
-                            { step: 3, label: "Emergency", icon: <Users size={14} /> },
-                            { step: 4, label: "Condition", icon: <Camera size={14} /> }
+                            { step: 1, label: "Details", icon: <IdCard size={14} /> },
+                            { step: 2, label: "Unit", icon: <Building2 size={14} /> },
+                            { step: 3, label: "Contact", icon: <Users size={14} /> },
+                            { step: 4, label: "Photos", icon: <Camera size={14} /> }
                         ].map((s) => (
                             <div key={s.step} className={`flex items-center gap-4 transition-all ${step === s.step ? 'opacity-100 translate-x-2' : 'opacity-30'}`}>
                                 <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-[10px] font-black ${step === s.step ? 'bg-[var(--accent-bg)] text-white' : 'border border-[var(--bg-panel)] text-[var(--bg-panel)]'}`}>
@@ -206,8 +287,8 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                     </div>
                 </div>
 
-                {/* RIGHT SIDE: FORM */}
-                <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
+                {/* RIGHT SIDE: CONTENT */}
+                <div className="flex-1 flex flex-col overflow-hidden bg-[var(--bg-panel)]">
                     <div className="p-8 border-b border-[var(--border)] border-opacity-5 flex justify-between items-center">
                         <span className="font-mono text-[10px] uppercase font-black opacity-40 tracking-[0.3em]">Step 0{step} / 04</span>
                         <button type="button" onClick={onClose} className="p-2 hover:bg-red-500 hover:text-white transition-all rounded-lg"><X size={20} /></button>
@@ -218,7 +299,7 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                             <div className="space-y-10 animate-reveal">
                                 <div>
                                     <h4 className="text-2xl font-black uppercase tracking-tight mb-2">Who are they?</h4>
-                                    <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-widest">Basic identification and contact details</p>
+                                    <p className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold tracking-widest">Name and contact details</p>
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -253,7 +334,7 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                                             </select>
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">ID Reference</label>
+                                            <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">ID Number</label>
                                             <input type="text" placeholder="Number" value={formData.idNumber} onChange={e => setFormData({...formData, idNumber: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm transition-all" />
                                         </div>
                                     </div>
@@ -269,38 +350,122 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-3">
-                                        <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest flex items-center gap-2">
-                                            <Building2 size={10} /> Select Building
-                                        </label>
-                                        <select value={formData.propertyId} onChange={e => setFormData({...formData, propertyId: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm appearance-none">
-                                            <option value="">Unassigned</option>
-                                            {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest">Unit / Room</label>
-                                        <select disabled={!formData.propertyId} value={formData.unitId} onChange={e => setFormData({...formData, unitId: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm appearance-none disabled:opacity-30">
-                                            <option value="">Choose Unit</option>
-                                            {availableUnits.map(u => <option key={u.name} value={u.name}>{u.name} ({u.typeId})</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-3">
-                                        <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest flex items-center gap-2">
-                                            <Calendar size={10} /> Move-in Date
-                                        </label>
-                                        <input type="date" value={formData.moveInDate} onChange={e => setFormData({...formData, moveInDate: e.target.value})} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm" />
-                                    </div>
-                                    <div className="bg-[var(--bg-ghost)] p-6 rounded-3xl border border-[var(--border)] border-opacity-5 flex flex-col justify-center">
-                                        <p className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest mb-1">Calculated Charges</p>
-                                        <div className="flex items-center gap-2">
-                                            <Coins size={14} className="text-[var(--accent-bg)]" />
-                                            <p className="text-2xl font-black">KES {parseFloat(calculatedCharges).toLocaleString()}</p>
+                                    <div className="space-y-8">
+                                        <div className="space-y-3">
+                                            <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest flex items-center gap-2">
+                                                <Building2 size={10} /> Assign Unit / Room
+                                            </label>
+                                            <select disabled={!formData.propertyId} value={formData.unitId} onChange={e => {
+                                                const uName = e.target.value;
+                                                const prop = properties.find(p => p.id === formData.propertyId);
+                                                const conf = prop ? parseConfig(prop.config) : {};
+                                                const u = conf.units?.find((un: any) => un.name === uName);
+                                                setFormData({...formData, unitId: uName, selectedTypeId: u?.typeId || u?.type || ''});
+                                            }} className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm appearance-none disabled:opacity-30">
+                                                <option value="">Choose Vacant Unit</option>
+                                                {availableUnits.map(u => <option key={u.name} value={u.name}>{u.name} ({u.typeId || u.type || 'Type Missing'})</option>)}
+                                            </select>
                                         </div>
-                                        <p className="font-mono text-[6px] uppercase font-bold opacity-30 mt-2">Rent + 1 Month Deposit</p>
+
+                                        {/* EMERGENCY FALLBACK: If unit has no type, let them select it to get the rent */}
+                                        {(() => {
+                                            const prop = properties.find(p => p.id === formData.propertyId);
+                                            const config = prop ? parseConfig(prop.config) : {};
+                                            const unit = config.units?.find((u: any) => u.name === formData.unitId);
+                                            const hasType = !!(unit?.typeId || unit?.type);
+                                            
+                                            if (formData.unitId && !hasType) {
+                                                return (
+                                                    <div className="space-y-3 animate-reveal">
+                                                        <label className="font-mono text-[8px] uppercase text-red-500 font-black tracking-widest flex items-center gap-2">
+                                                            <AlertCircle size={10} /> Missing Unit Type - Select Category to Auto-fill Rent
+                                                        </label>
+                                                        <select value={formData.selectedTypeId} onChange={e => setFormData({...formData, selectedTypeId: e.target.value})} className="w-full bg-red-500 bg-opacity-5 border border-red-500 border-opacity-20 p-5 rounded-2xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm appearance-none">
+                                                            <option value="">Select Category</option>
+                                                            {Object.keys(config.rents || {}).map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </select>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+
+                                        <div className="space-y-4">
+                                            <label className="font-mono text-[8px] uppercase text-[var(--text-muted)] font-black tracking-widest flex items-center gap-2">
+                                                <Calendar size={10} /> Move-in Date
+                                            </label>
+                                            <input 
+                                                type="date" 
+                                                value={formData.moveInDate} 
+                                                onChange={e => setFormData({...formData, moveInDate: e.target.value})} 
+                                                className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-6 rounded-3xl font-mono text-sm font-black focus:border-opacity-100 outline-none shadow-sm transition-all hover:bg-[var(--bg-ghost)]" 
+                                            />
+                                        </div>
+
+                                        {/* Financial Note */}
+                                        <div className="p-6 bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-5 rounded-3xl">
+                                            <p className="font-mono text-[8px] uppercase font-black text-[var(--text-muted)] mb-3">Automated Billing Enabled</p>
+                                            <p className="font-mono text-[10px] font-bold opacity-40 leading-relaxed">Financials are computed automatically from property setup rules. See the sidebar for the full breakdown.</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-[var(--text-base)] text-[var(--bg-panel)] p-8 rounded-3xl shadow-[12px_12px_0px_0px_var(--accent-bg)] flex flex-col justify-between">
+                                        <div>
+                                            <p className="font-mono text-[8px] uppercase font-black tracking-widest mb-1 opacity-50">Total Move-in Charge</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-4xl font-black tracking-tighter">KES {parseFloat(calculatedCharges).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-6 pt-6 border-t border-white border-opacity-10 space-y-2">
+                                            {(() => {
+                                                const config = parseConfig(property.config);
+                                                const unit = config.units?.find((u: any) => u.name === formData.unitId);
+                                                let rent = parseFloat(unit?.rent?.toString() || "0") || 0;
+                                                
+                                                // Fallback to category price
+                                                if (rent === 0) {
+                                                    const typeId = unit?.typeId || unit?.type || formData.selectedTypeId || 'N/A';
+                                                    if (typeId !== 'N/A') {
+                                                        const baseRentVal = config.rents?.[typeId] || 0;
+                                                        rent = Array.isArray(baseRentVal) ? (parseFloat(baseRentVal[0]) || 0) : 
+                                                               (typeof baseRentVal === 'object' ? (parseFloat(baseRentVal.min) || 0) : (parseFloat(baseRentVal) || 0));
+                                                    }
+                                                }
+                                                
+                                                const moveInFees = (config.oneTime || []).map((item: any) => {
+                                                    const amount = (!item.mode || item.mode === 'rent_multiple') 
+                                                        ? (rent * (parseFloat(item.multiple?.toString() || "1") || 1))
+                                                        : (parseFloat(item.amount?.toString() || "0") || 0);
+                                                    return { ...item, calculatedAmount: amount };
+                                                });
+
+                                                const selectedRecurring = (config.recurring || []).filter((r: any) => formData.selectedRecurringIds.includes(r.id));
+                                                
+                                                return (
+                                                    <>
+                                                        <div className="flex justify-between font-mono text-[8px] uppercase font-bold opacity-60">
+                                                            <span>Unit Rent</span>
+                                                            <span className="text-[var(--accent-bg)]">KES {rent.toLocaleString()}</span>
+                                                        </div>
+                                                        
+                                                        {/* MOVE-IN FEES BREAKDOWN */}
+                                                        {moveInFees.map((item: any) => (
+                                                            <div key={item.id} className="flex justify-between font-mono text-[8px] uppercase font-bold opacity-60 pt-2 border-t border-white border-opacity-5">
+                                                                <span>{item.name}</span>
+                                                                <span>+{item.calculatedAmount.toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                        
+                                                        {/* RECURRING BREAKDOWN */}
+                                                        {selectedRecurring.map((item: any) => (
+                                                            <div key={item.id} className="flex justify-between font-mono text-[8px] uppercase font-bold opacity-60">
+                                                                <span>{item.name}</span>
+                                                                <span>+{(parseFloat(item.amount?.toString() || "0") || 0).toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                )
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -433,12 +598,12 @@ export const AddTenantModal = ({ show, onClose, onSuccess, managerId, properties
                                 Next Step <ChevronRight size={16} />
                             </button>
                         ) : (
-                            <button type="submit" disabled={isSaving} className="flex-1 bg-[var(--text-base)] text-[var(--bg-panel)] py-6 rounded-2xl font-mono text-[10px] uppercase font-black shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[-2px] active:translate-y-0 transition-all flex items-center justify-center gap-3">
-                                {isSaving ? "Finalizing..." : <>Complete Onboarding <Check size={16} /></>}
+                            <button type="button" onClick={handleSubmit} disabled={isSaving} className="flex-1 bg-[var(--text-base)] text-[var(--bg-panel)] py-6 rounded-2xl font-mono text-[10px] uppercase font-black shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[-2px] active:translate-y-0 transition-all flex items-center justify-center gap-3">
+                                {isSaving ? "Finalizing..." : <>Done <Check size={16} /></>}
                             </button>
                         )}
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     );

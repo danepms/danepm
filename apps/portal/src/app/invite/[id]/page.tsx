@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useSession } from '@/lib/auth-client';
-import { getInvite, acceptInvite } from '@/app/actions/invites';
+import { api } from '@/lib/api';
 import { Shield, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function InvitePage() {
@@ -20,7 +20,7 @@ export default function InvitePage() {
 
   useEffect(() => {
     async function loadInvite() {
-      const res = await getInvite(id);
+      const res = await api.get<any>(`/invites/${id}`);
       if (res.success) {
         setInviteData(res.invite);
         setInviter(res.inviter);
@@ -40,7 +40,11 @@ export default function InvitePage() {
     }
 
     setIsAccepting(true);
-    const res = await acceptInvite(id, session.user.id, session.user.email);
+    const res = await api.post<any>(`/invites/accept`, { 
+      inviteId: id,
+      userId: session.user.id, 
+      userEmail: session.user.email 
+    });
     if (res.success) {
       // Redirect to the appropriate dashboard
       router.push(`/dashboard/${res.role}`);

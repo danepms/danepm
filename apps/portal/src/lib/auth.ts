@@ -31,6 +31,16 @@ export const auth = betterAuth({
     },
     emailAndPassword: {
         enabled: true,
+        async sendResetPassword({ user, url }) {
+            console.log(`[AUTH DEBUG] Reset link for ${user.email}: ${url}`);
+        }
+    },
+    emailVerification: {
+        enabled: true,
+        autoSignInAfterVerification: true,
+        async sendVerificationEmail({ user, url }) {
+            console.log(`[AUTH DEBUG] Verification link for ${user.email}: ${url}`);
+        }
     },
     plugins: [
         passkey(),
@@ -72,7 +82,7 @@ export const auth = betterAuth({
                             headers: {
                                 "accept": "application/json",
                                 "content-type": "application/json",
-                                "authorization": "Zoho-enczapikey wSsVR60kqR+jW697lGX/duY+kQhTBVigER5621uiuCKuS/yRpsc+lEDGUFCvSKMeQmQ6FWFDo79/m00B1Ttbidkuw1BUDiiF9mqRe1U4J3x17qnvhDzPVmtZkxuBLowJxAhtmWBjGs4g+g==",
+                                "authorization": `Zoho-enczapikey ${process.env.ZEPTOMAIL_API_KEY}`,
                             },
                             body: JSON.stringify({
                                 from: { address: "security@danesproperties.com", name: "Dane Platform" },

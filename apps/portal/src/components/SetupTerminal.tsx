@@ -74,7 +74,7 @@ export const SetupTerminal = ({ mode, signupRole, wizardStep, wizardData }: Setu
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-3">
             <Terminal size={18} className="text-[var(--text-muted)]" />
-            <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Assistant_Core</span>
+            <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Assistant</span>
           </div>
           <div className="flex gap-1.5">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
@@ -92,8 +92,8 @@ export const SetupTerminal = ({ mode, signupRole, wizardStep, wizardData }: Setu
       </div>
       
       <div className="font-mono text-[9px] text-[var(--text-muted)] uppercase border-t border-[var(--border)] pt-4 mt-4 shrink-0 flex justify-between">
-        <span>STATUS: CLEAR</span>
-        <span className="text-[var(--accent-bg)] font-bold tracking-widest">SYNCED: 5S_BREATH</span>
+        <span>STATUS: READY</span>
+        <span className="text-[var(--accent-bg)] font-bold tracking-widest">CONNECTED</span>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Zap, Receipt, Droplets, Trash2, Plus, ArrowRight } from 'lucide-react';
+import { Zap, Receipt, Droplets, Trash2, Plus, ArrowRight, Info, ArrowLeft } from 'lucide-react';
 
 interface Utilities {
   electricity: string;
@@ -28,101 +28,102 @@ interface BillingHubProps {
 
 export const BillingHub = ({ utilities, setUtilities, recurring, setRecurring, onNext, onBack }: BillingHubProps) => {
   return (
-     <form onSubmit={(e) => { e.preventDefault(); onNext(); }} className="flex flex-col h-full">
-      <div className="mb-10">
-        <button type="button" onClick={onBack} className="font-mono text-[10px] text-[var(--text-muted)] hover:text-[var(--text-base)] uppercase mb-6 flex items-center gap-2 transition-colors">
-          ← Go Back
-        </button>
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-12 h-12 border-2 border-[var(--text-base)] text-[var(--text-base)] flex items-center justify-center">
-            <Zap size={24} />
-          </div>
-          <div className="w-12 h-12 bg-[var(--text-base)] text-[var(--bg-base)] flex items-center justify-center shadow-[4px_4px_0px_0px_var(--shadow-color)]">
-            <Receipt size={24} />
+     <form onSubmit={(e) => { e.preventDefault(); onNext(); }} className="flex flex-col h-full space-y-6">
+      {/* Tight Header with Back Button */}
+      <div className="flex justify-between items-center border-b border-[var(--border)] border-opacity-10 pb-4">
+        <div className="flex items-center gap-3">
+          <button 
+            type="button" 
+            onClick={onBack} 
+            className="w-8 h-8 flex items-center justify-center border border-[var(--border)] border-opacity-20 rounded-base hover:bg-[var(--bg-input)] transition-all"
+          >
+            <ArrowLeft size={14} />
+          </button>
+          <div>
+            <h2 className="text-xl font-black uppercase tracking-tighter text-[var(--text-base)] flex items-center gap-2">
+              Billing Hub. <span className="font-mono text-[8px] opacity-30 font-black tracking-widest mt-1">/ SETUP-03</span>
+            </h2>
           </div>
         </div>
-        <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-tighter mb-4 leading-none text-[var(--text-base)]">
-          Billing Hub.
-        </h2>
-        <p className="text-sm font-mono text-[var(--text-muted)] uppercase">Configure utilities and recurring management fees.</p>
+
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-emerald-500/5 border border-emerald-500/10 rounded-base">
+           <Info size={10} className="text-emerald-500" />
+           <span className="font-mono text-[7px] uppercase font-black text-emerald-600/80 tracking-widest">Global Settings</span>
+        </div>
       </div>
 
-      <div className="space-y-12 flex-1">
-        {/* Utilities Selection */}
-        <div className="space-y-8">
-          <div>
-            <h3 className="font-black uppercase text-sm text-[var(--text-base)] mb-4 flex items-center gap-2">
-              <Zap size={16} className="text-[var(--accent-bg)]" /> Electricity
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Utilities: 5 Columns */}
+        <div className="lg:col-span-5 space-y-4">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-5 rounded-base">
+            <h3 className="font-black uppercase text-[10px] tracking-widest text-[var(--text-muted)] mb-4 flex items-center gap-2">
+              <Zap size={12} className="text-yellow-500" /> Electricity Billing
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { id: 'token', label: 'Tokens', desc: 'Tenants buy' },
-                { id: 'included', label: 'Included', desc: 'In rent' },
-                { id: 'extra', label: 'Billed', desc: 'Via meter' }
+                { id: 'token', label: 'Tokens' },
+                { id: 'included', label: 'Included' },
+                { id: 'extra', label: 'Metered' }
               ].map(opt => (
                 <button 
                   key={opt.id} type="button"
                   onClick={() => setUtilities({...utilities, electricity: opt.id})}
-                  className={`p-4 border text-left transition-all flex flex-col ${
+                  className={`py-3 border-2 text-center transition-all rounded-base ${
                     utilities.electricity === opt.id 
-                    ? 'bg-[var(--bg-panel)] border-[var(--accent-bg)] shadow-[3px_3px_0px_0px_var(--shadow-color)] text-[var(--text-base)]' 
-                    : 'bg-[var(--bg-base)] border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text-base)]'
+                    ? 'bg-[var(--accent-bg)] border-[var(--accent-bg)] text-[var(--accent-text)]' 
+                    : 'bg-[var(--bg-input)] border-[var(--border)] border-opacity-10 text-[var(--text-muted)] hover:border-opacity-30'
                   }`}
                 >
-                  <span className="font-black text-[10px] uppercase block mb-1">{opt.label}</span>
-                  <span className="text-[8px] font-mono uppercase opacity-70">{opt.desc}</span>
+                  <span className="font-black text-[9px] uppercase">{opt.label}</span>
                 </button>
               ))}
             </div>
             {utilities.electricity === 'extra' && (
-              <div className="reveal-step flex items-center gap-4 bg-[var(--bg-panel)] p-4 border border-[var(--accent-bg)] shadow-[3px_3px_0px_0px_var(--shadow-color)]">
-                <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold">Price per Unit</span>
-                <div className="relative flex-1 max-w-[200px]">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--text-muted)] font-bold">KES</span>
+              <div className="mt-3 animate-reveal">
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-[9px] text-[var(--text-muted)] font-black">KES / UNIT</span>
                   <input 
-                    type="number" required placeholder="0" 
+                    type="number" required placeholder="0.00" 
                     value={utilities.electricityPrice}
                     onChange={(e) => setUtilities({...utilities, electricityPrice: e.target.value})}
-                    className="w-full bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-base)] py-2 pl-12 pr-4 font-mono text-sm focus:border-[var(--accent-bg)] outline-none transition-all font-bold" 
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 text-[var(--text-base)] py-2.5 pl-20 pr-4 rounded-base font-mono text-xs focus:border-[var(--text-base)] outline-none font-black" 
                   />
                 </div>
               </div>
             )}
           </div>
 
-          <div>
-            <h3 className="font-black uppercase text-sm text-[var(--text-base)] mb-4 flex items-center gap-2">
-              <Droplets size={16} className="text-[var(--accent-bg)]" /> Water
+          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-5 rounded-base">
+            <h3 className="font-black uppercase text-[10px] tracking-widest text-[var(--text-muted)] mb-4 flex items-center gap-2">
+              <Droplets size={12} className="text-blue-500" /> Water Billing
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+            <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'included', label: 'Included in Rent', desc: 'Flat rate coverage' },
-                { id: 'extra', label: 'Billed Separately', desc: 'Unit consumption' }
+                { id: 'included', label: 'Included' },
+                { id: 'extra', label: 'Separately' }
               ].map(opt => (
                 <button 
                   key={opt.id} type="button"
                   onClick={() => setUtilities({...utilities, water: opt.id})}
-                  className={`p-4 border text-left transition-all flex flex-col ${
+                  className={`py-3 border-2 text-center transition-all rounded-base ${
                     utilities.water === opt.id 
-                    ? 'bg-[var(--bg-panel)] border-[var(--accent-bg)] shadow-[3px_3px_0px_0px_var(--shadow-color)] text-[var(--text-base)]' 
-                    : 'bg-[var(--bg-base)] border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--text-base)]'
+                    ? 'bg-[var(--accent-bg)] border-[var(--accent-bg)] text-[var(--accent-text)]' 
+                    : 'bg-[var(--bg-input)] border-[var(--border)] border-opacity-10 text-[var(--text-muted)] hover:border-opacity-30'
                   }`}
                 >
-                  <span className="font-black text-[10px] uppercase block mb-1">{opt.label}</span>
-                  <span className="text-[8px] font-mono uppercase opacity-70">{opt.desc}</span>
+                  <span className="font-black text-[9px] uppercase">{opt.label}</span>
                 </button>
               ))}
             </div>
             {utilities.water === 'extra' && (
-              <div className="reveal-step flex items-center gap-4 bg-[var(--bg-panel)] p-4 border border-[var(--accent-bg)] shadow-[3px_3px_0px_0px_var(--shadow-color)]">
-                <span className="font-mono text-[10px] text-[var(--text-muted)] uppercase font-bold">Price per Unit / Flat Rate</span>
-                <div className="relative flex-1 max-w-[200px]">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--text-muted)] font-bold">KES</span>
+              <div className="mt-3 animate-reveal">
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-[9px] text-[var(--text-muted)] font-black">KES / UNIT</span>
                   <input 
-                    type="number" required placeholder="0" 
+                    type="number" required placeholder="0.00" 
                     value={utilities.waterPrice}
                     onChange={(e) => setUtilities({...utilities, waterPrice: e.target.value})}
-                    className="w-full bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-base)] py-2 pl-12 pr-4 font-mono text-sm focus:border-[var(--accent-bg)] outline-none transition-all font-bold" 
+                    className="w-full bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 text-[var(--text-base)] py-2.5 pl-20 pr-4 rounded-base font-mono text-xs focus:border-[var(--text-base)] outline-none font-black" 
                   />
                 </div>
               </div>
@@ -130,37 +131,86 @@ export const BillingHub = ({ utilities, setUtilities, recurring, setRecurring, o
           </div>
         </div>
 
-        {/* Regular Bills Section */}
-        <div className="pt-8 border-t border-[var(--border)] border-opacity-10">
-          <h3 className="font-black uppercase text-sm text-[var(--text-base)] mb-6 flex items-center gap-2">
-            <Receipt size={16} className="text-[var(--accent-bg)]" /> Recurring Expenses
-          </h3>
-          <div className="space-y-3">
+        {/* Recurring: 7 Columns */}
+        <div className="lg:col-span-7 bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-5 rounded-base flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+             <div>
+               <h3 className="font-black uppercase text-[10px] tracking-widest text-[var(--text-muted)] flex items-center gap-2">
+                  <Receipt size={12} className="text-emerald-500" /> Recurring Fees
+               </h3>
+               <p className="font-mono text-[7px] uppercase font-bold text-emerald-600/70 mt-0.5">Monthly add-ons paid with rent (e.g. Garbage, Security, Metered Utils)</p>
+             </div>
+             <span className="font-mono text-[8px] font-black px-2 py-0.5 bg-[var(--bg-base)] border border-[var(--border)] border-opacity-10 rounded-full text-[var(--text-muted)]">{recurring.length}</span>
+          </div>
+
+          <div className="flex-1 space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {utilities.electricity === 'extra' && (
+              <div className="p-2 bg-[var(--bg-base)] border border-yellow-500/20 rounded-base flex items-center justify-between opacity-60">
+                <div className="flex items-center gap-2">
+                  <Zap size={10} className="text-yellow-500" />
+                  <span className="font-mono text-[8px] uppercase font-black">Electricity (Metered)</span>
+                </div>
+                <span className="font-mono text-[8px] font-black uppercase text-yellow-600/70">Auto-Invoiced</span>
+              </div>
+            )}
+            {utilities.water === 'extra' && (
+              <div className="p-2 bg-[var(--bg-base)] border border-blue-500/20 rounded-base flex items-center justify-between opacity-60">
+                <div className="flex items-center gap-2">
+                  <Droplets size={10} className="text-blue-500" />
+                  <span className="font-mono text-[8px] uppercase font-black">Water (Metered)</span>
+                </div>
+                <span className="font-mono text-[8px] font-black uppercase text-blue-600/70">Auto-Invoiced</span>
+              </div>
+            )}
+            
             {recurring.map((item: RecurringItem, index: number) => (
-              <div key={item.id} className="border border-[var(--border)] bg-[var(--bg-panel)] p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center relative shadow-[2px_2px_0px_0px_var(--shadow-color)]">
+              <div key={item.id} className="group bg-[var(--bg-input)] border border-[var(--border)] border-opacity-10 p-3 rounded-base flex items-center gap-3 animate-reveal relative">
                 <div className="flex-1">
-                  <label className="font-mono text-[8px] text-[var(--text-muted)] uppercase mb-1 block font-bold">Name</label>
-                  <input type="text" placeholder="e.g. Garbage" value={item.name} onChange={(e) => { const n = [...recurring]; n[index].name = e.target.value; setRecurring(n); }} className="w-full bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-base)] p-2 font-mono text-[10px] focus:border-[var(--accent-bg)] outline-none font-bold" />
+                  <input 
+                    type="text" 
+                    placeholder="Fee Name (e.g. Garbage)" 
+                    value={item.name} 
+                    onChange={(e) => { const n = [...recurring]; n[index].name = e.target.value; setRecurring(n); }} 
+                    className="w-full bg-transparent border-b border-transparent hover:border-[var(--border)] text-[var(--text-base)] p-1 font-mono text-[10px] focus:border-[var(--text-base)] outline-none font-black uppercase transition-all" 
+                  />
                 </div>
-                <div className="w-full sm:w-1/3">
-                  <label className="font-mono text-[8px] text-[var(--text-muted)] uppercase mb-1 block font-bold">Amount (KES)</label>
-                  <input type="number" placeholder="0" value={item.amount} onChange={(e) => { const n = [...recurring]; n[index].amount = e.target.value; setRecurring(n); }} className="w-full bg-[var(--bg-base)] border border-[var(--border)] text-[var(--text-base)] p-2 font-mono text-[10px] focus:border-[var(--accent-bg)] outline-none font-bold" />
+                <div className="w-24 relative">
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 font-mono text-[8px] text-[var(--text-muted)] font-black opacity-30">KES</span>
+                  <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={item.amount} 
+                    onChange={(e) => { const n = [...recurring]; n[index].amount = e.target.value; setRecurring(n); }} 
+                    className="w-full bg-transparent border-b border-transparent hover:border-[var(--border)] text-[var(--text-base)] p-1 pl-6 font-mono text-[10px] focus:border-[var(--text-base)] outline-none font-black transition-all" 
+                  />
                 </div>
-                <button type="button" onClick={() => setRecurring(recurring.filter((r: RecurringItem)=>r.id !== item.id))} className="absolute top-4 right-4 sm:relative sm:top-5 sm:right-0 p-1 text-[var(--text-muted)] hover:text-red-500 transition-colors">
-                  <Trash2 size={14} />
+                <button 
+                  type="button" 
+                  onClick={() => setRecurring(recurring.filter((r: RecurringItem)=>r.id !== item.id))} 
+                  className="p-1.5 text-[var(--text-muted)] hover:text-red-500 transition-colors rounded-sm hover:bg-red-500/5"
+                >
+                  <Trash2 size={12} />
                 </button>
               </div>
             ))}
-            <button type="button" onClick={() => setRecurring([...recurring, { id: Date.now(), name: '', amount: '', frequency: '1' }])} className="w-full border border-dashed border-[var(--border)] border-opacity-30 text-[var(--text-muted)] hover:text-[var(--text-base)] font-mono text-[9px] uppercase py-3 flex justify-center items-center gap-2 transition-all font-bold">
-              <Plus size={12} /> Add Management Fee
+            
+            <button 
+              type="button" 
+              onClick={() => setRecurring([...recurring, { id: Date.now(), name: '', amount: '', frequency: '1' }])} 
+              className="w-full border border-dashed border-[var(--border)] border-opacity-20 rounded-base text-[var(--text-muted)] hover:text-[var(--text-base)] hover:border-opacity-40 font-mono text-[9px] uppercase py-3 flex justify-center items-center gap-2 transition-all font-black group"
+            >
+              <Plus size={10} /> Add Item
             </button>
           </div>
         </div>
       </div>
 
-      <div className="pt-12 shrink-0">
-        <button type="submit" className="w-full bg-[var(--accent-bg)] text-[var(--accent-text)] font-bold font-mono text-sm uppercase py-6 border border-[var(--accent-bg)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_0px_var(--shadow-color)] active:translate-y-1 active:shadow-none transition-all duration-150 flex justify-center items-center gap-3">
-          Move-In Fees <ArrowRight size={16} />
+      <div className="pt-4 border-t border-[var(--border)] border-opacity-10">
+        <button 
+          type="submit" 
+          className="w-full bg-[var(--accent-bg)] text-[var(--accent-text)] font-black font-mono text-[10px] uppercase py-4 rounded-base hover:scale-[1.01] active:scale-[0.99] transition-all flex justify-center items-center gap-3 group"
+        >
+          Confirm Billing & Continue <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </form>

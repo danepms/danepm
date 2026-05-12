@@ -1,44 +1,114 @@
 "use client";
 
 import React from 'react';
-import { CheckSquare, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Building2, Users, Receipt, Zap, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export const Success = ({ units }: { units: any[] }) => {
+interface SuccessProps {
+  property: any;
+  units: any[];
+  tenants: any[];
+  recurring: any[];
+  utilities: any;
+}
+
+export const Success = ({ property, units, tenants, recurring, utilities }: SuccessProps) => {
   const router = useRouter();
   
+  const totalRent = units.reduce((acc, u) => acc + (parseFloat(u.rent) || 0), 0);
+  
+  // Calculate recurring fees + fixed utilities
+  const recurringFees = (recurring || []).reduce((acc, r) => acc + (parseFloat(r.amount) || 0), 0);
+  const fixedElec = utilities?.electricity === 'fixed' ? (parseFloat(utilities.electricityPrice) || 0) : 0;
+  const fixedWater = utilities?.water === 'fixed' ? (parseFloat(utilities.waterPrice) || 0) : 0;
+  
+  const totalRecurring = recurringFees + fixedElec + fixedWater;
+  const grandTotal = totalRent + totalRecurring;
+
   return (
-     <div className="h-full flex flex-col justify-center items-center text-center py-12">
-      <div className="relative mb-12">
-        <div className="w-32 h-32 bg-[var(--accent-bg)] text-[var(--accent-text)] flex items-center justify-center relative shadow-[8px_8px_0px_0px_var(--shadow-color)]">
-          <CheckSquare size={64} />
+    <div className="h-full flex flex-col items-center justify-center py-12 animate-reveal">
+      {/* Success Icon Animation */}
+      <div className="mb-10 relative">
+        <div className="absolute inset-0 bg-[var(--accent-bg)] blur-3xl opacity-20 animate-pulse rounded-full" />
+        <div className="relative w-24 h-24 bg-[var(--accent-bg)] text-[var(--accent-text)] rounded-full flex items-center justify-center shadow-2xl">
+          <CheckCircle2 size={48} strokeWidth={3} />
         </div>
       </div>
       
-      <h2 className="text-5xl md:text-6xl font-bold uppercase tracking-tighter mb-6 leading-none text-[var(--text-base)]">
-        Ready to roll!
-      </h2>
-      
-      <p className="text-sm font-mono text-[var(--text-muted)] uppercase max-w-md mx-auto mb-12 leading-relaxed">
-        Rules applied. {units.filter((u: any)=>u.status==='occupied').length} out of {units.length} units are currently occupied. The system is ready to automate your rent and bills.
-      </p>
-
-      <div className="border border-[var(--border)] bg-[var(--bg-panel)] p-6 max-w-sm w-full mb-12 text-left shadow-[4px_4px_0px_0px_var(--shadow-color)]">
-        <div className="font-mono text-[10px] text-[var(--text-muted)] uppercase border-b border-[var(--border)] pb-2 mb-4">Final Checklist</div>
-        <ul className="space-y-4 font-mono text-xs text-[var(--text-base)] uppercase">
-          <li className="flex items-start gap-3"><CheckSquare size={16} className="text-[var(--accent-bg)] shrink-0" /> Layout & Naming mapped</li>
-          <li className="flex items-start gap-3"><CheckSquare size={16} className="text-[var(--accent-bg)] shrink-0" /> Base rent configured</li>
-          <li className="flex items-start gap-3"><CheckSquare size={16} className="text-[var(--accent-bg)] shrink-0" /> Utilities & Billing rules set</li>
-          <li className="flex items-start gap-3"><CheckSquare size={16} className="text-[var(--accent-bg)] shrink-0" /> Occupancy state mapped</li>
-        </ul>
+      {/* Title Section */}
+      <div className="text-center space-y-2 mb-12">
+        <h2 className="text-4xl font-black uppercase tracking-tighter text-[var(--text-base)]">
+          {property?.name || 'Property'} is Live.
+        </h2>
+        <p className="font-mono text-[10px] uppercase text-[var(--text-muted)] tracking-[0.3em] font-black opacity-60">
+          Portfolio Launch Successful
+        </p>
       </div>
 
-      <button 
-        onClick={() => router.push('/dashboard/manager/properties')}
-        className="w-full max-w-sm bg-[var(--text-base)] text-[var(--bg-base)] font-bold font-mono text-sm uppercase py-6 border border-[var(--text-base)] shadow-[4px_4px_0px_0px_var(--shadow-color)] active:translate-y-1 active:shadow-none transition-all duration-150 flex justify-center items-center gap-3 group hover:opacity-90"
-      >
-        Go to Dashboard <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-      </button>
+      {/* Stats Grid - High Density / Premium Design */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl mb-12">
+        
+        {/* Core Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-5 rounded-base flex flex-col justify-between">
+            <Building2 size={16} className="text-[var(--text-muted)] mb-4" />
+            <div>
+              <p className="font-mono text-[8px] uppercase font-black text-[var(--text-muted)] mb-1">Total Units</p>
+              <p className="text-2xl font-black">{units.length}</p>
+            </div>
+          </div>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-5 rounded-base flex flex-col justify-between">
+            <Users size={16} className="text-[var(--text-muted)] mb-4" />
+            <div>
+              <p className="font-mono text-[8px] uppercase font-black text-[var(--text-muted)] mb-1">Total Tenants</p>
+              <p className="text-2xl font-black">{tenants.length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Projection */}
+        <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-10 p-6 rounded-base space-y-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-all">
+             <TrendingUp size={80} />
+          </div>
+          
+          <div className="space-y-4 relative z-10">
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--border)] border-opacity-5">
+              <div className="flex items-center gap-2">
+                <Receipt size={12} className="text-[var(--text-muted)]" />
+                <span className="font-mono text-[8px] uppercase font-black text-[var(--text-muted)]">Monthly Rent</span>
+              </div>
+              <span className="font-mono text-[10px] font-black uppercase text-[var(--text-base)]">KES {totalRent.toLocaleString()}</span>
+            </div>
+
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--border)] border-opacity-5">
+              <div className="flex items-center gap-2">
+                <Zap size={12} className="text-[var(--text-muted)]" />
+                <span className="font-mono text-[8px] uppercase font-black text-[var(--text-muted)]">Recurring Utilities</span>
+              </div>
+              <span className="font-mono text-[10px] font-black uppercase text-[var(--text-base)]">KES {totalRecurring.toLocaleString()}</span>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <span className="font-mono text-[9px] uppercase font-black text-[var(--accent-bg)]">Grand Total / Month</span>
+              <span className="text-xl font-black text-[var(--text-base)]">KES {grandTotal.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Button */}
+      <div className="w-full max-w-sm space-y-4">
+        <button 
+          onClick={() => router.push(`/dashboard/manager/properties/${property?.id || ''}`)}
+          className="w-full bg-[var(--accent-bg)] text-[var(--accent-text)] font-black font-mono text-[10px] uppercase py-5 rounded-base shadow-2xl hover:scale-[1.01] active:scale-[0.99] transition-all flex justify-center items-center gap-3 group"
+        >
+          Enter Property Command Center <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        </button>
+        <p className="text-center font-mono text-[7px] uppercase font-black text-[var(--text-muted)] opacity-40">
+          Automations are now active and monitoring all assets
+        </p>
+      </div>
     </div>
   );
 };

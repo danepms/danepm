@@ -6,20 +6,37 @@ import {
   ChevronLeft, ChevronRight, Download, Eye,
   Terminal, Database, Zap, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { getAuditLogs, getCronLogs } from '@/app/actions';
+import { api } from '@/lib/api';
 import { useToast } from '@/context/ToastContext';
 import { resolveDeviceName } from '@/lib/utils';
 
 interface AuditVaultProps {
   managerId: string;
+  properties: any[];
 }
 
-export const AuditVault = ({ managerId }: AuditVaultProps) => {
+export const ActivityLog = ({ managerId, properties }: AuditVaultProps) => {
   const { showToast } = useToast();
   const [logs, setLogs] = useState<any[]>([]);
   const [cronLogs, setCronLogs] = useState<any[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'audit' | 'cron'>('audit');
   const [isLoading, setIsLoading] = useState(true);
+
+  const resolveUnitName = (propertyId: string, unitId: string) => {
+    if (!unitId) return 'NONE';
+    if (!unitId.startsWith('U_')) return unitId;
+    
+    const prop = properties.find(p => p.id === propertyId);
+    if (!prop || !prop.config) return unitId;
+    
+    try {
+        const config = JSON.parse(prop.config);
+        const unit = config.units?.find((u: any) => u.id === unitId || u.name === unitId);
+        return unit?.name || unitId;
+    } catch (e) {
+        return unitId;
+    }
+  };
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -37,13 +54,13 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
   const loadLogs = async () => {
     setIsLoading(true);
     if (activeSubTab === 'audit') {
-      const res = await getAuditLogs(managerId, page, limit, filters);
+      const res = await api.get<any>(`/admin/audit-logs?managerId=${managerId}&page=${page}&limit=${limit}&action=${filters.action}&entityType=${filters.entityType}`);
       if (res.success) {
         setLogs(res.logs || []);
         setTotal(res.total as any || 0);
       }
     } else {
-      const res = await getCronLogs(managerId, page, limit);
+      const res = await api.get<any>(`/admin/cron-logs?managerId=${managerId}&page=${page}&limit=${limit}`);
       if (res.success) {
         setCronLogs(res.logs || []);
         setTotal(res.total as any || 0);
@@ -71,14 +88,14 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
         <div className="relative z-10">
           <div className="flex items-center gap-4 mb-2">
              <div className="px-3 py-1 bg-[var(--accent-bg)] text-[var(--accent-text)] rounded-sm text-[8px] font-black uppercase tracking-[0.2em] shadow-lg">
-                Secure Vault
+                History
              </div>
              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-2">
-                <Database size={12} /> Data Integrity: 100.0%
+                <Database size={12} /> Live Sync
              </span>
           </div>
-          <h2 className="text-5xl font-black tracking-tighter">System Ledger</h2>
-          <p className="text-sm text-[var(--text-muted)] font-medium mt-1">Forensic state tracking & autonomous heartbeat</p>
+          <h2 className="text-5xl font-black tracking-tighter">Activity</h2>
+          <p className="text-sm text-[var(--text-muted)] font-medium mt-1">A record of recent activity</p>
         </div>
 
         <div className="flex bg-[var(--bg-ghost)] p-1.5 rounded-sm border border-[var(--border)] border-opacity-10 relative z-10">
@@ -86,13 +103,13 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
             onClick={() => { setActiveSubTab('audit'); setPage(1); }}
             className={`px-8 py-3 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeSubTab === 'audit' ? 'bg-[var(--text-base)] text-[var(--bg-panel)] shadow-xl' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
           >
-            <Activity size={14} /> Audit Trail
+            <Activity size={14} /> Log
           </button>
           <button
             onClick={() => { setActiveSubTab('cron'); setPage(1); }}
             className={`px-8 py-3 rounded-sm text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeSubTab === 'cron' ? 'bg-[var(--text-base)] text-[var(--bg-panel)] shadow-xl' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
           >
-            <RefreshCw size={14} /> Cron Heartbeat
+            <RefreshCw size={14} /> Updates
           </button>
         </div>
       </div>
@@ -158,10 +175,10 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
             <table className="w-full text-left font-mono">
                <thead>
                   <tr className="bg-[var(--bg-ghost)]/50">
-                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Timestamp</th>
-                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Event_Action</th>
-                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Context_Entity</th>
-                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Operator</th>
+                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Time</th>
+                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Action</th>
+                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Item</th>
+                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5">Person</th>
                      <th className="p-6 text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] border-b border-[var(--border)] border-opacity-5 text-right">Details</th>
                   </tr>
                </thead>
@@ -171,7 +188,7 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
                       <td colSpan={5} className="p-20 text-center">
                          <div className="flex flex-col items-center gap-4">
                             <Terminal size={32} className="animate-pulse text-[var(--accent-bg)]" />
-                            <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-40">Decrypting Logs...</p>
+                            <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-40">Loading...</p>
                          </div>
                       </td>
                     </tr>
@@ -198,7 +215,7 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
                            </td>
                            <td className="p-6">
                               <p className="text-[11px] font-bold">{l.actorName || 'System'}</p>
-                              <p className="text-[9px] text-[var(--text-muted)] font-medium mt-0.5 opacity-60">{resolveDeviceName(l.ipAddress)}</p>
+                              <p className="text-[9px] text-[var(--text-muted)] font-medium mt-0.5 opacity-60">{resolveDeviceName(l.userAgent)}</p>
                            </td>
                            <td className="p-6 text-right">
                               <button 
@@ -214,23 +231,29 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
                             <td colSpan={5} className="p-8">
                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                   <div className="space-y-4">
-                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">Technical Metadata</p>
+                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">Technical Info</p>
                                      <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-[var(--bg-panel)] p-4 rounded border border-[var(--border)] border-opacity-5">
-                                           <p className="text-[8px] font-bold opacity-40 uppercase mb-1">Origin IP</p>
+                                           <p className="text-[8px] font-bold opacity-40 uppercase mb-1">Source</p>
                                            <p className="text-xs font-bold">{l.ipAddress || '0.0.0.0'}</p>
                                         </div>
                                         <div className="bg-[var(--bg-panel)] p-4 rounded border border-[var(--border)] border-opacity-5">
                                            <p className="text-[8px] font-bold opacity-40 uppercase mb-1">Resolved Device</p>
-                                           <p className="text-xs font-bold">{resolveDeviceName(l.ipAddress)}</p>
+                                           <p className="text-xs font-bold">{resolveDeviceName(l.userAgent)}</p>
                                         </div>
                                      </div>
                                   </div>
                                   <div className="space-y-4">
-                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">Payload Delta</p>
+                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-2">Details</p>
                                      <div className="bg-[var(--bg-panel)] p-6 rounded border border-[var(--border)] border-opacity-5 font-mono text-[10px] overflow-x-auto max-h-60 custom-scrollbar">
-                                        {l.payload ? (
-                                          <pre className="whitespace-pre-wrap">{JSON.stringify(l.payload, null, 2)}</pre>
+                                         {l.payload ? (
+                                           <pre className="whitespace-pre-wrap">{JSON.stringify((() => {
+                                                const p = { ...l.payload };
+                                                if (p.unit) p.unit = resolveUnitName(l.propertyId, p.unit);
+                                                if (p.from) p.from = resolveUnitName(l.propertyId, p.from);
+                                                if (p.to) p.to = resolveUnitName(l.propertyId, p.to);
+                                                return p;
+                                           })(), null, 2)}</pre>
                                         ) : (
                                           <span className="opacity-40 italic">No structured data payload recorded for this event.</span>
                                         )}
@@ -267,7 +290,7 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
                            </td>
                            <td className="p-6">
                               <p className="text-[11px] font-bold">{l.durationMs ? `${l.durationMs}ms` : '---'}</p>
-                              <p className="text-[9px] text-[var(--text-muted)] font-medium mt-0.5">Exec_Time</p>
+                              <p className="text-[9px] text-[var(--text-muted)] font-medium mt-0.5">Speed</p>
                            </td>
                            <td className="p-6 text-right">
                               <div className="flex items-center justify-end gap-3 text-[var(--text-muted)]">
@@ -277,7 +300,7 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
                            </td>
                         </tr>
                       )) : (
-                        <tr><td colSpan={5} className="p-20 text-center opacity-40 italic text-xs">No heartbeat logs found. The brain is resting.</td></tr>
+                        <tr><td colSpan={5} className="p-20 text-center opacity-40 italic text-xs">All caught up. No tasks found.</td></tr>
                       )
                     )
                   )}
@@ -290,10 +313,10 @@ export const AuditVault = ({ managerId }: AuditVaultProps) => {
       <div className="flex justify-between items-center text-[var(--text-muted)] relative z-10 pb-10">
          <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]" />
-            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Real-Time Sync Active</span>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Live</span>
          </div>
          <p className="text-[9px] font-black uppercase tracking-[0.2em]">
-            Total Records Processed: {total.toLocaleString()} Dispatches
+            Total entries: {total.toLocaleString()}
          </p>
       </div>
 

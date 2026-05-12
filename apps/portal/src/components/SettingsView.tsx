@@ -5,21 +5,21 @@ import {
   User, Shield, Bell, Clock, Monitor, Smartphone, 
   Trash2, RefreshCw, Key, Mail, Phone, Check, X,
   ChevronRight, LogOut, ShieldCheck, Fingerprint, 
-  AlertTriangle, Lock, UserX, Plus, ShieldAlert, Zap
+  AlertTriangle, Lock, UserX, Plus, ShieldAlert, Zap, Briefcase
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { authClient } from '@/lib/auth-client';
-import { getAuditLogs, getActiveSessions, revokeSession, updateSecuritySettings } from '@/app/actions';
+import { api } from '@/lib/api';
 import { resolveDeviceName } from '@/lib/utils';
 
 interface SettingsViewProps {
   user: any;
-  initialTab?: 'profile' | 'security';
+  initialTab?: 'profile' | 'security' | 'business' | 'finance';
 }
 
 export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps) => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'business' | 'finance'>(initialTab);
   const [sessions, setSessions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [passkeys, setPasskeys] = useState<any[]>([]);
@@ -41,6 +41,19 @@ export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
+  // Business State
+  const [companyName, setCompanyName] = useState(user?.businessConfig?.companyName || '');
+  const [address, setAddress] = useState(user?.businessConfig?.address || '');
+  const [supportEmail, setSupportEmail] = useState(user?.businessConfig?.supportEmail || '');
+  const [supportPhone, setSupportPhone] = useState(user?.businessConfig?.supportPhone || '');
+  const [logoUrl, setLogoUrl] = useState(user?.businessConfig?.logoUrl || '');
+
+  // Finance State
+  const [rentDueDay, setRentDueDay] = useState(user?.financeConfig?.rentDueDay || 5);
+  const [penaltyGraceDays, setPenaltyGraceDays] = useState(user?.financeConfig?.penaltyGraceDays || 5);
+  const [penaltyType, setPenaltyType] = useState(user?.financeConfig?.penaltyType || 'percent');
+  const [penaltyValue, setPenaltyValue] = useState(user?.financeConfig?.penaltyValue || 10);
+
   useEffect(() => {
     let timer: any;
     if (showMfaModal && mfaStep === 'otp' && countdown > 0) {
@@ -60,7 +73,7 @@ export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps
 
   const loadSessions = async () => {
     setIsLoading(true);
-    const res = await getActiveSessions(user.id);
+    const res = await api.get<any>(`/admin/sessions?managerId=${user.id}`);
     if (res.success) setSessions(res.sessions || []);
     setIsLoading(false);
   };
@@ -128,8 +141,45 @@ export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps
     }
   };
 
+  const handleUpdateBusiness = async () => {
+    setIsLoading(true);
+    const res = await api.post<any>("/admin/business-settings", {
+        managerId: user.id, companyName, address, supportEmail, supportPhone, logoUrl
+    });
+    if (res.success) showToast('Business settings saved', 'success');
+    else showToast('Failed to save settings', 'error');
+    setIsLoading(false);
+  };
+
+  const handleUpdateFinance = async () => {
+    setIsLoading(true);
+    const res = await api.post<any>("/admin/finance-settings", {
+        managerId: user.id, rentDueDay, penaltyGraceDays, penaltyType, penaltyValue
+    });
+    if (res.success) showToast('Portfolio policy updated', 'success');
+    else showToast('Failed to update policy', 'error');
+    setIsLoading(false);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await api.post<any>("/admin/upload-logo", formData);
+    if (res.success && res.url) {
+        setLogoUrl(res.url);
+        showToast('Logo uploaded', 'success');
+    } else {
+        showToast('Upload failed', 'error');
+    }
+    setIsLoading(false);
+  };
+
   const handleRevokeSession = async (id: string) => {
-    const res = await revokeSession(id, user.id);
+    const res = await api.post<any>(`/admin/sessions/${id}/revoke`, { managerId: user.id });
     if (res.success) {
       showToast('Logged out device', 'success');
       loadSessions();
@@ -140,16 +190,28 @@ export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps
     <div className="w-full max-w-4xl mx-auto py-6 px-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
       
       {/* --- TOP TABS --- */}
-      <div className="flex gap-1 bg-black p-1 rounded-lg border border-[var(--border)] border-opacity-10 mb-6 w-fit mx-auto">
+      <div className="flex flex-wrap gap-1 bg-black p-1 rounded-lg border border-[var(--border)] border-opacity-10 mb-6 w-fit mx-auto justify-center">
         <button 
           onClick={() => setActiveTab('profile')}
-          className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'profile' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
+          className={`px-4 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'profile' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
         >
           My Profile
         </button>
         <button 
+          onClick={() => setActiveTab('business')}
+          className={`px-4 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'business' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
+        >
+          Business Identity
+        </button>
+        <button 
+          onClick={() => setActiveTab('finance')}
+          className={`px-4 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'finance' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
+        >
+          Portfolio Policy
+        </button>
+        <button 
           onClick={() => setActiveTab('security')}
-          className={`px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'security' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
+          className={`px-4 md:px-6 py-2 text-[10px] font-black uppercase tracking-widest rounded transition-all ${activeTab === 'security' ? 'bg-[var(--text-base)] text-[var(--bg-panel)]' : 'text-[var(--text-muted)] hover:text-[var(--text-base)]'}`}
         >
           Security & Auth
         </button>
@@ -209,6 +271,149 @@ export const SettingsView = ({ user, initialTab = 'profile' }: SettingsViewProps
                 <p className="text-[9px] text-red-500/80 font-black uppercase tracking-widest">Terminate Account Data</p>
               </div>
               <button className="px-4 py-2 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest rounded shadow-lg">Delete</button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'business' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+            <div className="bg-[var(--bg-panel)] p-8 border border-[var(--border)] border-opacity-10 rounded-xl space-y-8">
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="w-32 h-32 bg-black border border-[var(--border)] border-opacity-10 rounded-xl flex items-center justify-center overflow-hidden relative group">
+                  {logoUrl ? <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-2" /> : <Briefcase className="opacity-20" size={40} />}
+                  <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-all">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-white">Upload Logo</p>
+                    <input type="file" className="hidden" onChange={handleLogoUpload} accept="image/*" />
+                  </label>
+                </div>
+                <div className="flex-1 space-y-6 w-full">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Company Registered Name</label>
+                    <input 
+                      type="text" 
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="w-full bg-black border border-[var(--border)] border-opacity-10 p-4 rounded-lg font-bold text-lg focus:ring-2 focus:ring-[var(--accent-bg)] outline-none transition-all"
+                      placeholder="E.G. DANE MANAGEMENT LTD"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Support Email</label>
+                      <input 
+                        type="email" 
+                        value={supportEmail}
+                        onChange={(e) => setSupportEmail(e.target.value)}
+                        className="w-full bg-black border border-[var(--border)] border-opacity-10 p-3 rounded font-bold text-sm outline-none"
+                        placeholder="support@company.com"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Support Hotline</label>
+                      <input 
+                        type="text" 
+                        value={supportPhone}
+                        onChange={(e) => setSupportPhone(e.target.value)}
+                        className="w-full bg-black border border-[var(--border)] border-opacity-10 p-3 rounded font-bold text-sm outline-none"
+                        placeholder="+254..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Headquarters Physical Address</label>
+                <textarea 
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full bg-black border border-[var(--border)] border-opacity-10 p-4 rounded-lg font-bold text-sm min-h-[80px] outline-none"
+                  placeholder="Street, Building, Floor..."
+                />
+              </div>
+              <div className="flex justify-end border-t border-[var(--border)] border-opacity-5 pt-6">
+                <button 
+                    onClick={handleUpdateBusiness}
+                    disabled={isLoading}
+                    className="px-10 py-4 bg-[var(--text-base)] text-[var(--bg-panel)] text-[10px] font-black uppercase tracking-widest rounded-lg shadow-xl hover:translate-y-[-2px] transition-all active:translate-y-0 disabled:opacity-50"
+                >
+                  Save Business Identity
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'finance' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+            <div className="bg-[var(--bg-panel)] p-8 border border-[var(--border)] border-opacity-10 rounded-xl space-y-8">
+              <div className="flex items-center gap-4 border-b border-[var(--border)] border-opacity-5 pb-4">
+                <Zap className="text-amber-500" size={20} />
+                <div>
+                  <h3 className="font-black uppercase tracking-tight text-lg">Global Financial Policy</h3>
+                  <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase tracking-widest">Defaults for all properties unless overridden</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Standard Rent Due Day</label>
+                    <input 
+                      type="number" 
+                      min={1} max={28}
+                      value={rentDueDay}
+                      onChange={(e) => setRentDueDay(parseInt(e.target.value))}
+                      className="w-full bg-black border border-[var(--border)] border-opacity-10 p-4 rounded-lg font-black text-2xl outline-none"
+                    />
+                    <p className="text-[8px] text-[var(--text-muted)] font-bold uppercase mt-2 italic">Typically the 1st or 5th of every month</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Penalty Grace Period (Days)</label>
+                    <input 
+                      type="number" 
+                      min={0}
+                      value={penaltyGraceDays}
+                      onChange={(e) => setPenaltyGraceDays(parseInt(e.target.value))}
+                      className="w-full bg-black border border-[var(--border)] border-opacity-10 p-4 rounded-lg font-black text-2xl outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Default Late Fee Structure</label>
+                    <div className="flex gap-2 p-1 bg-black rounded-lg border border-[var(--border)] border-opacity-10">
+                      <button 
+                        onClick={() => setPenaltyType('percent')}
+                        className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded ${penaltyType === 'percent' ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`}
+                      >Percentage (%)</button>
+                      <button 
+                        onClick={() => setPenaltyType('flat')}
+                        className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded ${penaltyType === 'flat' ? 'bg-[var(--accent-bg)] text-[var(--accent-text)]' : 'text-[var(--text-muted)]'}`}
+                      >Flat Rate (KES)</button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-[var(--text-muted)] tracking-widest">Penalty Value</label>
+                    <input 
+                      type="number" 
+                      value={penaltyValue}
+                      onChange={(e) => setPenaltyValue(parseFloat(e.target.value))}
+                      className="w-full bg-black border border-[var(--border)] border-opacity-10 p-4 rounded-lg font-black text-2xl outline-none text-[var(--accent-bg)]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-[var(--border)] border-opacity-5 pt-6">
+                <button 
+                    onClick={handleUpdateFinance}
+                    disabled={isLoading}
+                    className="px-10 py-4 bg-[var(--text-base)] text-[var(--bg-panel)] text-[10px] font-black uppercase tracking-widest rounded-lg shadow-xl hover:translate-y-[-2px] transition-all active:translate-y-0 disabled:opacity-50"
+                >
+                  Update Portfolio Policy
+                </button>
+              </div>
             </div>
           </div>
         )}

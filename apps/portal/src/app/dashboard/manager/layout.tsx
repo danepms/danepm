@@ -6,7 +6,7 @@ import { ManagerDashboard } from '@/components/ManagerDashboard';
 import { useSession, signOut } from '@/lib/auth-client';
 import { useToast } from '@/context/ToastContext';
 import { useTheme } from '@/context/ThemeContext';
-import { getUserPropertyCount } from '@/app/actions';
+import { api } from '@/lib/api';
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
 
     const checkProperties = async () => {
       setIsChecking(true);
-      const res = await getUserPropertyCount(session.user.id);
+      const res = await api.get<any>(`/properties/count?managerId=${session.user.id}`);
       if (res.success) {
         const count = res.count;
         setHasProperties(count > 0);

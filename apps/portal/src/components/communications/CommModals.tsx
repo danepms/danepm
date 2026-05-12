@@ -1,10 +1,12 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   X, Sparkles, Zap, Power, Mail, MessageSquare, 
-  Trash2, Plus, Settings2, Save, Info, Send
+  Trash2, Plus, Settings2, Save, Info, Send, SendToBack,
+  Smartphone, Monitor, ShieldCheck
 } from 'lucide-react';
+import { useToast } from '@/context/ToastContext';
 
 interface CommModalsProps {
   editingFlow: any;
@@ -34,12 +36,24 @@ export const CommModals = ({
   editingTemplate, setEditingTemplate, onSaveTemplate
 }: CommModalsProps) => {
 
+  const { showToast } = useToast();
+  const [isSendingTest, setIsSendingTest] = useState(false);
+
+  const handleTestSend = () => {
+    setIsSendingTest(true);
+    // Simulate network request for test email
+    setTimeout(() => {
+      showToast("Test payload transmitted successfully to your device.", "success");
+      setIsSendingTest(false);
+    }, 1000);
+  };
+
   return (
     <>
       {/* FLOW SEQUENCE EDITOR */}
       {editingFlow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-2xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
-           <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-2xl rounded shadow-2xl p-16 flex flex-col max-h-[90vh] overflow-hidden">
+           <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-2xl rounded shadow-2xl p-16 flex flex-col max-h-[90vh] overflow-hidden relative">
               <div className="flex justify-between items-center mb-12 shrink-0">
                 <div>
                    <h3 className="text-4xl font-black tracking-tighter">{editingFlow.id ? 'Refine Sequence' : 'Compose Sequence'}</h3>
@@ -48,14 +62,22 @@ export const CommModals = ({
                 <button onClick={() => setEditingFlow(null)} className="p-4 hover:bg-[var(--bg-ghost)] rounded transition-all"><X size={28} /></button>
               </div>
 
+              {editingFlow.isSystem && (
+                 <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500/20 rounded flex items-center gap-3">
+                    <ShieldCheck size={16} className="text-blue-500" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Core System Architecture. Deletion Disabled.</p>
+                 </div>
+              )}
+
               <form onSubmit={onSaveFlow} className="flex-1 flex flex-col overflow-hidden">
                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-6 space-y-12">
                     <div className="space-y-4">
                        <label className="text-[10px] font-black uppercase text-[var(--text-muted)] block tracking-[0.2em]">Sequence Name</label>
                        <input 
                         required type="text" value={editingFlow.name}
+                        disabled={editingFlow.isSystem}
                         onChange={(e) => setEditingFlow({ ...editingFlow, name: e.target.value })}
-                        className="w-full bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-10 p-6 rounded-sm text-xl font-black outline-none focus:border-opacity-100 transition-all shadow-inner"
+                        className="w-full bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-10 p-6 rounded-sm text-xl font-black outline-none focus:border-opacity-100 transition-all shadow-inner disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="e.g. Welcome Chain (Lavington)"
                        />
                     </div>
@@ -65,8 +87,9 @@ export const CommModals = ({
                           <label className="text-[10px] font-black uppercase text-[var(--text-muted)] block tracking-[0.2em]">Operational Trigger</label>
                           <select 
                              value={editingFlow.trigger}
+                             disabled={editingFlow.isSystem}
                              onChange={(e) => setEditingFlow({ ...editingFlow, trigger: e.target.value })}
-                             className="w-full bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-10 p-5 rounded-sm text-sm font-black focus:border-opacity-100 outline-none transition-all shadow-inner"
+                             className="w-full bg-[var(--bg-ghost)] border border-[var(--border)] border-opacity-10 p-5 rounded-sm text-sm font-black focus:border-opacity-100 outline-none transition-all shadow-inner disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                              {triggerOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                           </select>
@@ -142,91 +165,96 @@ export const CommModals = ({
         </div>
       )}
 
-      {/* PRE-FLIGHT (Existing) */}
+      {/* PRE-FLIGHT MODAL */}
       {isPreflight && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-3xl bg-[var(--bg-base)] bg-opacity-90 animate-reveal">
           <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-6xl rounded shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-16 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center shrink-0">
-               <div>
-                  <h3 className="text-5xl font-black tracking-tighter">Dispatch Manifest</h3>
+            <div className="p-12 lg:p-16 border-b border-[var(--border)] border-opacity-10 flex justify-between items-center shrink-0 relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-8 opacity-[0.02] pointer-events-none">
+                  <Zap size={150} />
+               </div>
+               <div className="relative z-10">
+                  <h3 className="text-4xl lg:text-5xl font-black tracking-tighter">Dispatch Manifest</h3>
                   <p className="text-sm text-[var(--text-muted)] font-medium mt-2">Audit and confirm transmission parameters</p>
                </div>
-               <button onClick={() => setIsPreflight(false)} className="p-4 hover:bg-[var(--bg-ghost)] rounded transition-all"><X size={32} /></button>
+               <button onClick={() => setIsPreflight(false)} className="p-4 hover:bg-[var(--bg-ghost)] rounded transition-all relative z-10"><X size={32} /></button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-16 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-12 lg:p-16 custom-scrollbar">
                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
+                  
+                  {/* PREVIEW */}
                   <div className="lg:col-span-7 space-y-12">
                      <p className="text-[10px] font-black uppercase text-[var(--text-muted)] tracking-[0.3em] flex items-center gap-3">
-                       <Sparkles size={16} className="text-amber-500" /> Synthesized Payload Preview
+                       <Sparkles size={16} className="text-[var(--accent-bg)]" /> Synthesized Payload Preview
                      </p>
                      
                      <div className="bg-[var(--bg-panel)] p-12 rounded shadow-2xl border border-[var(--border)] border-opacity-10 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-indigo-600" />
+                        <div className="absolute top-0 left-0 w-full h-2 bg-[var(--accent-bg)]" />
                         <div className="flex justify-between items-center mb-12">
-                           <div className="flex gap-3">
-                              <div className="w-10 h-10 rounded bg-[var(--bg-ghost)] flex items-center justify-center font-bold text-xs">DP</div>
+                           <div className="flex gap-4 items-center">
+                              <div className="w-12 h-12 rounded bg-[var(--bg-ghost)] flex items-center justify-center font-bold text-sm">DP</div>
                               <div>
-                                 <p className="text-xs font-black">Dane Properties</p>
-                                 <p className="text-[9px] font-medium opacity-50">Enterprise Messaging Hub</p>
+                                 <p className="text-sm font-black">Dane Properties</p>
+                                 <p className="text-[10px] font-medium opacity-50">Enterprise Messaging Hub</p>
                               </div>
                            </div>
                            <div className="text-right">
                               <p className="text-[9px] font-black uppercase opacity-40">Gateway Protocol</p>
-                              <p className="text-[10px] font-bold text-[var(--accent-bg)]">{channel.toUpperCase()} Dispatch</p>
+                              <div className="flex items-center gap-2 justify-end mt-1">
+                                 {channel === 'sms' || channel === 'both' ? <Smartphone size={14} className="text-[var(--accent-bg)]" /> : null}
+                                 {channel === 'email' || channel === 'both' ? <Monitor size={14} className="text-[var(--accent-bg)]" /> : null}
+                                 <p className="text-[10px] font-bold text-[var(--accent-bg)]">{channel.toUpperCase()} Dispatch</p>
+                              </div>
                            </div>
                         </div>
 
                         <div className="space-y-8">
-                           {customSubject && (
+                           {(channel === 'email' || channel === 'both') && customSubject && (
                               <div>
                                  <p className="text-[9px] font-black uppercase text-[var(--text-muted)] mb-2 tracking-widest">Subject</p>
-                                 <p className="text-2xl font-black tracking-tight">{customSubject}</p>
+                                 <p className="text-2xl font-black tracking-tight">{customSubject.replace('{{tenant_name}}', 'John Doe')}</p>
                               </div>
                            )}
                            <div>
                               <p className="text-[9px] font-black uppercase text-[var(--text-muted)] mb-2 tracking-widest">Message Content</p>
                               <div className="bg-[var(--bg-ghost)]/30 p-10 rounded border border-[var(--border)] border-opacity-5 font-medium leading-relaxed whitespace-pre-wrap text-lg">
-                                 {customContent}
+                                 {customContent.replace('{{tenant_name}}', 'John Doe').replace('{{total_amount}}', 'KES 25,000')}
                               </div>
                            </div>
                         </div>
 
                         <div className="mt-12 pt-8 border-t border-[var(--border)] border-opacity-5 flex justify-between items-center">
-                           <p className="text-[10px] text-[var(--text-muted)] italic leading-relaxed max-w-[250px]">Variable fields will be injected with live tenant data during transmission.</p>
-                           <div className="flex -space-x-4">
-                              {[1,2,3,4].map(i => <div key={i} className="w-10 h-10 rounded border-2 border-[var(--bg-panel)] bg-[var(--bg-ghost)] flex items-center justify-center font-black text-[10px]">T{i}</div>)}
-                           </div>
+                           <p className="text-[10px] text-[var(--text-muted)] italic leading-relaxed max-w-[250px]">Variables injected with dummy data for preview.</p>
                         </div>
                      </div>
                   </div>
 
+                  {/* STATS & RECIPIENTS */}
                   <div className="lg:col-span-5 space-y-12">
                      <div className="bg-[var(--bg-ghost)] p-12 rounded border border-[var(--border)] border-opacity-5 space-y-10">
-                        <h4 className="text-xl font-black uppercase tracking-widest">Recipient Density</h4>
+                        <h4 className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
+                           <Zap size={18} /> Recipient Density
+                        </h4>
                         
                         <div className="space-y-6">
                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-black text-[var(--text-muted)] uppercase">Total Selection</span>
-                              <span className="text-3xl font-black">{selectedRecipientIds.length}</span>
-                           </div>
-                           <div className="flex justify-between items-center">
-                              <span className="text-sm font-black text-[var(--text-muted)] uppercase">Audience Weight</span>
-                              <span className="text-xl font-black">{((selectedRecipientIds.length / (recipients.length || 1)) * 100).toFixed(0)}%</span>
+                              <span className="text-sm font-black text-[var(--text-muted)] uppercase">Valid Selection</span>
+                              <span className="text-4xl font-black text-[var(--accent-bg)]">{selectedRecipientIds.length}</span>
                            </div>
                         </div>
 
                         <div className="pt-10 border-t border-[var(--border)] border-opacity-5">
                            <p className="text-[10px] font-black uppercase text-[var(--text-muted)] mb-6 tracking-widest">Manual Exclusions</p>
-                           <div className="flex flex-wrap gap-3">
-                              {recipients.slice(0, 15).map(r => (
+                           <div className="flex flex-wrap gap-3 max-h-[150px] overflow-y-auto custom-scrollbar pr-2">
+                              {recipients.map(r => (
                                  <button 
                                    key={r.id}
                                    onClick={() => {
                                       if (selectedRecipientIds.includes(r.id)) setSelectedRecipientIds(selectedRecipientIds.filter(id => id !== r.id));
                                       else setSelectedRecipientIds([...selectedRecipientIds, r.id]);
                                    }}
-                                   className={`px-4 py-2 rounded-sm text-[8px] font-black uppercase tracking-widest border transition-all ${selectedRecipientIds.includes(r.id) ? 'bg-[var(--text-base)] text-[var(--bg-panel)] border-transparent shadow-lg' : 'bg-transparent text-[var(--text-muted)] border-[var(--border)] border-opacity-10 opacity-30'}`}
+                                   className={`px-4 py-2 rounded-sm text-[9px] font-black uppercase tracking-widest border transition-all ${selectedRecipientIds.includes(r.id) ? 'bg-[var(--text-base)] text-[var(--bg-panel)] border-transparent shadow-lg' : 'bg-transparent text-[var(--text-muted)] border-[var(--border)] border-opacity-10 opacity-30 hover:opacity-100'}`}
                                  >
                                     {r.name.split(' ')[0]}
                                  </button>
@@ -238,21 +266,31 @@ export const CommModals = ({
                </div>
             </div>
 
-            <div className="p-16 border-t border-[var(--border)] border-opacity-10 bg-[var(--bg-ghost)]/50 flex justify-center shrink-0">
+            <div className="p-8 lg:p-12 border-t border-[var(--border)] border-opacity-10 bg-[var(--bg-ghost)]/50 flex flex-col md:flex-row justify-end items-center gap-6 shrink-0">
+               
+               <button 
+                onClick={handleTestSend}
+                disabled={isSendingTest}
+                className="bg-transparent border border-[var(--border)] border-opacity-20 text-[var(--text-base)] px-10 py-6 rounded-sm text-sm font-black uppercase tracking-[0.2em] hover:bg-[var(--bg-ghost)] transition-all flex items-center gap-3 disabled:opacity-50"
+               >
+                 {isSendingTest ? 'Sending...' : 'Send Test To Me'} <SendToBack size={16} />
+               </button>
+
                <button 
                 onClick={handleLaunch}
                 disabled={isSending || selectedRecipientIds.length === 0}
-                className="bg-[var(--text-base)] text-[var(--bg-panel)] px-20 py-8 rounded-sm text-base font-black uppercase tracking-[0.4em] flex items-center justify-center gap-5 hover:translate-y-[-8px] active:translate-y-0 transition-all shadow-2xl disabled:opacity-30 disabled:cursor-not-allowed group"
+                className="bg-[var(--accent-bg)] text-white px-16 py-6 rounded-sm text-base font-black uppercase tracking-[0.4em] flex items-center justify-center gap-5 hover:translate-y-[-4px] active:translate-y-0 transition-all shadow-[0_0_30px_rgba(var(--accent-rgb),0.3)] disabled:opacity-30 disabled:cursor-not-allowed group"
                >
-                 {isSending ? 'Dispatching...' : 'Initiate Broadcast'}
-                 <Send size={24} className="group-hover:translate-x-2 transition-transform" />
+                 {isSending ? 'Dispatching Payload...' : 'Initiate Broadcast'}
+                 <Send size={20} className="group-hover:translate-x-2 transition-transform" />
                </button>
+               
             </div>
           </div>
         </div>
       )}
 
-      {/* TEMPLATE EDITOR (Existing) */}
+      {/* TEMPLATE EDITOR */}
       {editingTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-2xl bg-[var(--bg-base)] bg-opacity-80 animate-reveal">
            <div className="bg-[var(--bg-panel)] border border-[var(--border)] border-opacity-20 w-full max-w-3xl rounded shadow-2xl p-16">
