@@ -13,7 +13,10 @@ async function bootstrap() {
     origin: [
       process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
       'http://localhost:3001',
-      'https://dane.pms' // add other production domains here
+      'http://localhost:3002',
+      'https://portal.danesproperties.com',
+      'https://danesproperties.com',
+      'https://dane.pms'
     ],
     credentials: true,
   });

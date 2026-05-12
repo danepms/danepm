@@ -11,6 +11,11 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.10"
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
   }
 }
