@@ -2,17 +2,18 @@
 
 import React, { useState } from 'react';
 import { 
-  Building2, ArrowRight, HelpCircle, ChevronDown, 
-  Terminal, Monitor, Settings, Compass, HelpCircle as HelpIcon 
+  Building2, ArrowRight, ChevronDown, 
+  Monitor, Settings, Compass, Users, ClipboardList,
+  HelpCircle as HelpIcon 
 } from 'lucide-react';
 
 import OverviewTab from '../components/OverviewTab';
-import AutomationTab from '../components/AutomationTab';
-import SchemaTab from '../components/SchemaTab';
-import PricingTab from '../components/PricingTab';
+import TenantLifecycleTab from '../components/TenantLifecycleTab';
+import RentBillingTab from '../components/RentBillingTab';
+import OperationsTab from '../components/OperationsTab';
 import LoaderOverlay from '../components/LoaderOverlay';
 
-type ActiveTab = 'overview' | 'automation' | 'schema' | 'pricing';
+type ActiveTab = 'overview' | 'lifecycle' | 'rent' | 'operations';
 
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
@@ -36,19 +37,19 @@ export default function LandingPage() {
   const faqs = [
     {
       q: "How does automated M-Pesa collection work?",
-      a: "Dane PMS integrates directly with your Safaricom M-Pesa Paybill or Till number webhooks. When a tenant makes a payment, the M-Pesa callback is instantly matched, invoices are settled in FIFO order, and a WhatsApp/SMS receipt is triggered immediately."
+      a: "Tenants pay via your Safaricom M-Pesa Till or Paybill. Dane instantly detects the transaction, matches it using the tenant's registered phone number or their Unit ID reference, clears outstanding invoices from oldest to newest (FIFO), updates arrears, and dispatches a WhatsApp/SMS payment receipt automatically."
     },
     {
-      q: "What access and reports do property owners get?",
-      a: "You can invite owners to their own read-only portal. They can monitor live occupancy rates, review monthly rental incomes, track itemized maintenance costs, and download tax-ready financial statements."
+      q: "Can I migrate my existing tenant records from Excel?",
+      a: "Yes! Dane includes a bulk Excel importer template. You can download the format, fill in your active properties, units, tenant names, phone numbers, and current arrears, and upload them to be operational in minutes."
     },
     {
-      q: "Is my tenant data and records secure?",
-      a: "Absolutely. All tenant records, agreements, and move-in photos are uploaded to private, secure Cloudflare R2/S3 buckets. Our database runs on ISO-compliant cloud servers with automatic daily backups."
+      q: "What access do landlords and property owners get?",
+      a: "You can invite property owners to their own read-only portal. They can review month-over-month occupancy trends, monitor active rent collections, track logged caretaker expenses, and download statements without needing status updates."
     },
     {
-      q: "How are SMS alerts and communications billed?",
-      a: "System transactional emails are completely free. For SMS, you only pay for what you use at wholesale partner rates (typically KES 0.85 per SMS) with no hidden margins or markups."
+      q: "How are system SMS alerts billed?",
+      a: "All transactional email reports are free. SMS alerts are charged at wholesale rates (typically KES 0.85 per SMS) deducted directly from your prepaid wallet balance."
     }
   ];
 
@@ -68,12 +69,12 @@ export default function LandingPage() {
       <header className="border-b border-[#151515] bg-[#090909]/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 md:px-6 h-[28px] border-b border-[#121212] flex items-center justify-between text-[8px] font-mono text-[var(--text-dim)]">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-pulse" /> GATEWAY_SERVER: ONLINE</span>
-            <span className="hidden sm:inline">COMM_QUEUE: 0_PENDING</span>
+            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" /> SYSTEM STATUS: ONLINE</span>
+            <span className="hidden sm:inline">M-PESA MATCHING ENGINE: ONLINE</span>
           </div>
           <div className="flex items-center gap-4">
-            <span>DANE_CORE // REV_0.8.2</span>
-            <span>PING: 14ms</span>
+            <span>DANE SYSTEM OVERWATCH</span>
+            <span>SECURE SESSION</span>
           </div>
         </div>
 
@@ -89,9 +90,9 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-1">
             {[
               { id: 'overview', label: 'SYSTEM OVERVIEW', icon: Monitor },
-              { id: 'automation', label: 'AUTOMATION ENGINE', icon: Settings },
-              { id: 'schema', label: 'DATABASE SCHEMA', icon: Terminal },
-              { id: 'pricing', label: 'SERVICE BILLING', icon: Compass }
+              { id: 'lifecycle', label: 'TENANT LIFE CYCLE', icon: Users },
+              { id: 'rent', label: 'RENT & INVOICING', icon: Compass },
+              { id: 'operations', label: 'PROPERTY OPERATIONS', icon: ClipboardList }
             ].map(t => (
               <button
                 key={t.id}
@@ -128,9 +129,9 @@ export default function LandingPage() {
         <div className="grid grid-cols-4 md:hidden border-t border-[#121212] bg-[#070707] text-[8px] font-mono font-bold">
           {[
             { id: 'overview', label: 'OVERVIEW' },
-            { id: 'automation', label: 'AUTOMATION' },
-            { id: 'schema', label: 'SCHEMA' },
-            { id: 'pricing', label: 'BILLING' }
+            { id: 'lifecycle', label: 'TENANTS' },
+            { id: 'rent', label: 'BILLING' },
+            { id: 'operations', label: 'OPERATIONS' }
           ].map(t => (
             <button
               key={t.id}
@@ -153,19 +154,19 @@ export default function LandingPage() {
         {/* Render Active Tab Screen */}
         <div className="min-h-[450px]">
           {activeTab === 'overview' && <OverviewTab onGoToSignup={() => window.location.href = `${PORTAL}/auth?mode=signup`} />}
-          {activeTab === 'automation' && <AutomationTab />}
-          {activeTab === 'schema' && <SchemaTab />}
-          {activeTab === 'pricing' && <PricingTab onGoToSignup={() => window.location.href = `${PORTAL}/auth?mode=signup`} />}
+          {activeTab === 'lifecycle' && <TenantLifecycleTab />}
+          {activeTab === 'rent' && <RentBillingTab />}
+          {activeTab === 'operations' && <OperationsTab />}
         </div>
 
-        {/* ── COLLAPSIBLE TECHNICAL FAQ DIAGNOSTICS ── */}
+        {/* ── TECHNICAL FAQ DIAGNOSTICS ── */}
         <section className="border-t border-[#1a1a1a] pt-12 space-y-6">
           <div className="text-center max-w-xl mx-auto">
             <h3 className="text-xl font-black uppercase tracking-tight font-mono text-white flex items-center justify-center gap-2">
-              <HelpIcon size={16} className="text-[var(--accent)]" /> OPERATIONAL DIAGNOSTICS FAQ
+              <HelpIcon size={16} className="text-[var(--accent)]" /> PROPERTY MANAGEMENT FAQ
             </h3>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              Exact answers to architectural limits, reconciliation timelines, and support cycles.
+              Factual, direct answers on onboarding, M-Pesa setups, and platform capabilities.
             </p>
           </div>
 
@@ -211,17 +212,17 @@ export default function LandingPage() {
             <div className="w-6 h-6 rounded bg-[var(--accent)] flex items-center justify-center">
               <Building2 size={12} color="#000" />
             </div>
-            <span className="text-xs font-black uppercase text-white">DANE SYSTEM</span>
+            <span className="text-xs font-black uppercase text-white">DANE PMS</span>
           </div>
 
           <div className="flex items-center gap-6 text-[10px]">
-            <a href="/terms" className="hover:text-white transition-colors">TERMS OF USE</a>
-            <a href="/privacy" className="hover:text-white transition-colors">PRIVACY CODE</a>
-            <a href="/cookies" className="hover:text-white transition-colors">COOKIE POLICY</a>
+            <a href="/terms" className="hover:text-white transition-colors">TERMS</a>
+            <a href="/privacy" className="hover:text-white transition-colors">PRIVACY</a>
+            <a href="/cookies" className="hover:text-white transition-colors">COOKIES</a>
           </div>
 
           <div className="text-[9px] text-[var(--text-dim)]">
-            © {new Date().getFullYear()} DANE PMS. POWERED BY NESTJS & NEON DATABASE.
+            © {new Date().getFullYear()} DANE PMS. ALL RIGHTS RESERVED.
           </div>
         </div>
       </footer>

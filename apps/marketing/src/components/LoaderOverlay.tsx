@@ -11,18 +11,18 @@ export default function LoaderOverlay({ onComplete }: LoaderOverlayProps) {
   const [logIndex, setLogIndex] = useState(0);
 
   const logs = [
-    "INITIALIZING CORE SYSTEM CONFIG...",
-    "ESTABLISHING SECURE HANDSHAKE TO NEON POSTGRES...",
-    "PARSING DRIZZLE DATABASE SCHEMA...",
-    "RESOLVING WORKSPACE DEPENDENCIES...",
-    "SYNCING M-PESA WEBHOOKS CALLBACK ENDPOINTS...",
-    "CALCULATING ARREARS AND INVOICE LEDGERS...",
-    "STARTING COMMUNICATION DAEMON WORKERS...",
-    "RENDER COMPLETED successfully."
+    "LOADING PROPERTY MANAGEMENT INTERFACE...",
+    "FETCHING PROPERTY UNITS AND TENANCY MATRIX...",
+    "RECALCULATING ACTIVE TENANT ARREARS...",
+    "COMPILING MONTHLY RENT INVOICING RECORDS...",
+    "SYNCING M-PESA TRANSACTION LOGS...",
+    "PROCESSING MAINTENANCE REQUEST STATUSES...",
+    "UPDATING OWNER PORTFOLIO REPORTS...",
+    "DASHBOARD SYNCHRONIZED SUCCESSFULLY."
   ];
 
   useEffect(() => {
-    const duration = 700; // total animation time in ms
+    const duration = 600; // total animation time in ms
     const intervalTime = 15;
     const steps = duration / intervalTime;
     let stepCount = 0;
@@ -40,7 +40,7 @@ export default function LoaderOverlay({ onComplete }: LoaderOverlayProps) {
         clearInterval(timer);
         setTimeout(() => {
           onComplete();
-        }, 150);
+        }, 120);
       }
     }, intervalTime);
 
@@ -51,13 +51,13 @@ export default function LoaderOverlay({ onComplete }: LoaderOverlayProps) {
     <div className="fixed inset-0 z-[100] flex flex-col justify-between p-8 bg-[#050505] font-mono text-[10px] tracking-wider text-[var(--text-muted)] select-none">
       {/* Corner telemetry decorations */}
       <div className="flex justify-between items-center opacity-40">
-        <span>SYS.LOADER // REV_0.4.1</span>
-        <span>STATUS: SYSTEM_SYNC_ACTIVE</span>
+        <span>SYSTEM_LOADER // DANE_PORTAL</span>
+        <span>STATUS: SYNCING_ENVIRONMENT</span>
       </div>
 
       {/* Center status display */}
       <div className="flex flex-col items-center justify-center space-y-4 my-auto">
-        <div className="text-4xl md:text-6xl font-black text-white tracking-tighter">
+        <div className="text-4xl md:text-5xl font-black text-white tracking-tighter">
           {progress}%
         </div>
         <div className="w-48 h-[2px] bg-[#1a1a1a] relative overflow-hidden rounded-full">
@@ -75,7 +75,7 @@ export default function LoaderOverlay({ onComplete }: LoaderOverlayProps) {
 
       {/* Footer info */}
       <div className="flex justify-between items-center opacity-40">
-        <span>EST. TIME: 0.70S</span>
+        <span>READY_INDEX</span>
         <span>© {new Date().getFullYear()} DANE PMS</span>
       </div>
 
