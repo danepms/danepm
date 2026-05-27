@@ -51,7 +51,7 @@ export class TenantsController {
 
   @Post(':id/archive')
   async archiveTenant(@Param('id') id: string, @Body() data: any) {
-    return this.tenantsService.archiveTenant(id, data.managerId, data.metadata);
+    return this.tenantsService.archiveTenant(id, data.managerId, data);
   }
 
   @Post('upload-photo')

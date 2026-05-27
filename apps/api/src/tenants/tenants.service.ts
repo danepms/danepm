@@ -103,9 +103,16 @@ export class TenantsService {
   }
 
   async archiveTenant(id: string, managerId: string, metadata: any = {}) {
+    const moveOutDate = metadata.moveOutDate ? new Date(metadata.moveOutDate) : new Date();
+    const moveOutPhotos = metadata.moveOutPhotos ? JSON.stringify(metadata.moveOutPhotos) : null;
+    const finalStatement = metadata.finalStatement ? JSON.stringify(metadata.finalStatement) : null;
+
     await this.db.update(schema.tenant)
         .set({ 
             status: 'archived',
+            moveOutDate,
+            moveOutPhotos,
+            finalStatement,
             updatedAt: new Date(),
         })
         .where(and(eq(schema.tenant.id, id), eq(schema.tenant.managerId, managerId)));

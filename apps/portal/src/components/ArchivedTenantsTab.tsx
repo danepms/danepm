@@ -31,6 +31,41 @@ export const ArchivedTenantsTab = ({ managerId }: ArchivedTenantsTabProps) => {
     setIsLoading(false);
   };
 
+  const handleExportStatement = (tenant: any) => {
+    if (!tenant) return;
+    const s = JSON.parse(tenant.finalStatement || '{}');
+    const lines = [
+      `DANE PMS - TENANT CLOSING STATEMENT`,
+      `====================================`,
+      `Tenant ID: ${tenant.id}`,
+      `Tenant Name: ${tenant.name}`,
+      `Phone: ${tenant.phone}`,
+      `Email: ${tenant.email || 'N/A'}`,
+      `Property: ${tenant.propertyName || 'N/A'}`,
+      `Unit: ${tenant.unitId || 'N/A'}`,
+      `Move-in Date: ${tenant.moveInDate ? new Date(tenant.moveInDate).toLocaleDateString() : 'N/A'}`,
+      `Move-out Date: ${tenant.moveOutDate ? new Date(tenant.moveOutDate).toLocaleDateString() : 'N/A'}`,
+      `------------------------------------`,
+      `Outstanding Arrears: KES ${s.outstandingArrears?.toLocaleString() || 0}`,
+      `Damage Charges: KES ${s.damageCharges?.toLocaleString() || 0}`,
+      `Final Closing Balance: KES ${s.finalBalance?.toLocaleString() || 0}`,
+      `------------------------------------`,
+      `Inspection Findings:`,
+      s.damageNotes || 'No specific damage notes recorded.',
+      `====================================`,
+      `Generated on: ${new Date().toLocaleDateString()}`
+    ];
+    
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${tenant.name.replace(/\s+/g, '_')}_closing_statement.txt`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-12 animate-reveal">
       <div className="flex items-center justify-between border-b border-[var(--border)] pb-8 border-opacity-10">
@@ -164,7 +199,10 @@ export const ArchivedTenantsTab = ({ managerId }: ArchivedTenantsTabProps) => {
                 </div>
 
                 <div className="p-8 border-t border-[var(--border)] border-opacity-5 flex justify-end gap-4 bg-[var(--bg-ghost)]">
-                    <button className="px-8 py-4 border border-[var(--border)] border-opacity-10 rounded-xl font-mono text-[10px] uppercase font-black hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all flex items-center gap-2">
+                    <button 
+                        onClick={() => handleExportStatement(selectedTenant)}
+                        className="px-8 py-4 border border-[var(--border)] border-opacity-10 rounded-xl font-mono text-[10px] uppercase font-black hover:bg-[var(--text-base)] hover:text-[var(--bg-panel)] transition-all flex items-center gap-2"
+                    >
                         <Download size={14} /> Export Statement
                     </button>
                     <button onClick={() => setSelectedTenant(null)} className="px-8 py-4 bg-[var(--text-base)] text-[var(--bg-panel)] rounded-xl font-mono text-[10px] uppercase font-black transition-all">Close</button>

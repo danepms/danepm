@@ -47,7 +47,7 @@ export const CommunicationsTab = ({ managerId, properties, initialView = 'overvi
   // Editor States
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editingFlow, setEditingFlow] = useState<any>(null);
-  const [flowTab, setFlowTab] = useState<'manage' | 'analytics' | 'nudges'>('manage');
+  const [flowTab, setFlowTab] = useState<'manage' | 'analytics' | 'nudges' | 'queue'>('manage');
 
   useEffect(() => {
     setActiveTab(initialView);
