@@ -1,444 +1,231 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Building2, ArrowRight, Zap, ShieldCheck, Users, BarChart3,
-  MessageSquare, Receipt, ChevronRight, Star, CheckCircle2,
-  Globe, ArrowUpRight, Mail, Phone, MapPin, Menu, X
+import React, { useState } from 'react';
+import { 
+  Building2, ArrowRight, HelpCircle, ChevronDown, 
+  Terminal, Monitor, Settings, Compass, HelpCircle as HelpIcon 
 } from 'lucide-react';
-import Link from 'next/link';
-import Image from 'next/image';
 
-/* ════════════════════════════════════════
-   INTERSECTION OBSERVER HOOK
-   ════════════════════════════════════════ */
-function useInView(threshold = 0.15) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
-  return { ref, visible };
-}
+import OverviewTab from '../components/OverviewTab';
+import AutomationTab from '../components/AutomationTab';
+import SchemaTab from '../components/SchemaTab';
+import PricingTab from '../components/PricingTab';
+import LoaderOverlay from '../components/LoaderOverlay';
 
-/* ════════════════════════════════════════
-   ANIMATED COUNTER
-   ════════════════════════════════════════ */
-function Counter({ end, suffix = '', prefix = '' }: { end: number; suffix?: string; prefix?: string }) {
-  const [val, setVal] = useState(0);
-  const { ref, visible } = useInView();
-  useEffect(() => {
-    if (!visible) return;
-    let start = 0;
-    const dur = 2000;
-    const step = Math.ceil(end / (dur / 16));
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setVal(end); clearInterval(timer); }
-      else setVal(start);
-    }, 16);
-    return () => clearInterval(timer);
-  }, [visible, end]);
-  return <span ref={ref}>{prefix}{val.toLocaleString()}{suffix}</span>;
-}
+type ActiveTab = 'overview' | 'automation' | 'schema' | 'pricing';
 
-/* ════════════════════════════════════════
-   MAIN PAGE
-   ════════════════════════════════════════ */
 export default function LandingPage() {
-  const [mobileMenu, setMobileMenu] = useState(false);
-  const feat = useInView();
-  const stats = useInView();
-  const how = useInView();
-  const test = useInView();
-  const cta = useInView();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [pendingTab, setPendingTab] = useState<ActiveTab | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const PORTAL = "https://portal.danesproperties.com";
 
+  const handleTabSwitch = (tab: ActiveTab) => {
+    if (tab === activeTab) return;
+    setPendingTab(tab);
+  };
+
+  const onLoaderComplete = () => {
+    if (pendingTab) {
+      setActiveTab(pendingTab);
+      setPendingTab(null);
+    }
+  };
+
+  const faqs = [
+    {
+      q: "How does automated M-Pesa collection work?",
+      a: "Dane PMS integrates directly with your Safaricom M-Pesa Paybill or Till number webhooks. When a tenant makes a payment, the M-Pesa callback is instantly matched, invoices are settled in FIFO order, and a WhatsApp/SMS receipt is triggered immediately."
+    },
+    {
+      q: "What access and reports do property owners get?",
+      a: "You can invite owners to their own read-only portal. They can monitor live occupancy rates, review monthly rental incomes, track itemized maintenance costs, and download tax-ready financial statements."
+    },
+    {
+      q: "Is my tenant data and records secure?",
+      a: "Absolutely. All tenant records, agreements, and move-in photos are uploaded to private, secure Cloudflare R2/S3 buckets. Our database runs on ISO-compliant cloud servers with automatic daily backups."
+    },
+    {
+      q: "How are SMS alerts and communications billed?",
+      a: "System transactional emails are completely free. For SMS, you only pay for what you use at wholesale partner rates (typically KES 0.85 per SMS) with no hidden margins or markups."
+    }
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col relative">
+    <div className="min-h-screen bg-[#060606] text-white flex flex-col relative overflow-x-hidden selection:bg-[var(--accent)] selection:text-black font-sans">
+      
+      {/* Dynamic Loading Screen transition */}
+      {pendingTab && (
+        <LoaderOverlay onComplete={onLoaderComplete} />
+      )}
 
-      {/* ── NAV ── */}
-      <nav className="fixed top-0 inset-x-0 z-50 glass-strong" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="max-w-7xl mx-auto h-[72px] px-6 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent)' }}>
-              <Building2 size={18} color="#000" />
+      {/* Cyber Grid Background */}
+      <div className="absolute inset-0 grid-dot-pattern opacity-[0.12] pointer-events-none z-0" />
+      <div className="absolute top-0 inset-x-0 h-[600px] bg-gradient-to-b from-[rgba(200,255,0,0.03)] to-transparent pointer-events-none z-0" />
+
+      {/* ── TOP TELEMETRY PANEL ── */}
+      <header className="border-b border-[#151515] bg-[#090909]/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-[28px] border-b border-[#121212] flex items-center justify-between text-[8px] font-mono text-[var(--text-dim)]">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-[var(--accent)] animate-pulse" /> GATEWAY_SERVER: ONLINE</span>
+            <span className="hidden sm:inline">COMM_QUEUE: 0_PENDING</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span>DANE_CORE // REV_0.8.2</span>
+            <span>PING: 14ms</span>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-[64px] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-[var(--accent)] flex items-center justify-center">
+              <Building2 size={16} color="#000" />
             </div>
-            <span className="text-xl font-black tracking-tighter">Dane.</span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-10">
-            {['Features', 'How It Works', 'Testimonials'].map(l => (
-              <a key={l} href={`#${l.toLowerCase().replace(/ /g, '-')}`}
-                className="text-[11px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors"
-                style={{ color: 'var(--text-muted)' }}>{l}</a>
-            ))}
+            <span className="text-lg font-black tracking-tighter uppercase font-mono">DANE <span className="text-[9px] font-bold text-[var(--text-muted)] tracking-wider">PMS</span></span>
           </div>
 
-          <div className="hidden md:flex items-center gap-4">
-            <a href={PORTAL} className="px-5 py-2.5 text-[11px] font-bold uppercase tracking-widest hover:text-white transition-colors" style={{ color: 'var(--text-muted)' }}>
+          {/* Desktop Tab Switcher */}
+          <nav className="hidden md:flex items-center gap-1">
+            {[
+              { id: 'overview', label: 'SYSTEM OVERVIEW', icon: Monitor },
+              { id: 'automation', label: 'AUTOMATION ENGINE', icon: Settings },
+              { id: 'schema', label: 'DATABASE SCHEMA', icon: Terminal },
+              { id: 'pricing', label: 'SERVICE BILLING', icon: Compass }
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => handleTabSwitch(t.id as ActiveTab)}
+                className={`px-4 py-2 rounded-lg font-mono text-[9px] font-bold tracking-wider transition-all flex items-center gap-1.5 border ${
+                  activeTab === t.id
+                    ? 'bg-[var(--accent)] text-black border-transparent shadow-[0_0_20px_rgba(200,255,0,0.15)]'
+                    : 'text-[var(--text-muted)] border-transparent hover:border-[#222] hover:text-white'
+                }`}
+              >
+                <t.icon size={12} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <a 
+              href={PORTAL} 
+              className="text-[9px] font-mono font-bold uppercase tracking-wider text-[var(--text-muted)] hover:text-white px-3 py-1.5 rounded transition-all"
+            >
               Log In
             </a>
-            <a href={`${PORTAL}/auth?mode=signup`}
-              className="px-6 py-2.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all hover:opacity-90 flex items-center gap-2"
-              style={{ background: 'var(--accent)', color: '#000' }}>
-              Get Started <ArrowRight size={14} />
+            <a 
+              href={`${PORTAL}/auth?mode=signup`}
+              className="bg-white text-black font-black uppercase text-[9px] tracking-widest px-4 py-2 rounded-md hover:opacity-90 transition-all"
+            >
+              START
             </a>
           </div>
-
-          <button className="md:hidden p-2" onClick={() => setMobileMenu(!mobileMenu)}>
-            {mobileMenu ? <X size={24} /> : <Menu size={24} />}
-          </button>
         </div>
 
-        {mobileMenu && (
-          <div className="md:hidden px-6 pb-6 space-y-4 animate-fade-up" style={{ background: 'var(--bg-base)' }}>
-            {['Features', 'How It Works', 'Testimonials'].map(l => (
-              <a key={l} href={`#${l.toLowerCase().replace(/ /g, '-')}`}
-                onClick={() => setMobileMenu(false)}
-                className="block py-3 text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>{l}</a>
-            ))}
-            <a href={`${PORTAL}/auth?mode=signup`}
-              className="block w-full text-center py-4 rounded-lg text-sm font-black uppercase"
-              style={{ background: 'var(--accent)', color: '#000' }}>
-              Get Started
-            </a>
-          </div>
-        )}
-      </nav>
+        {/* Mobile Tab Switcher Grid */}
+        <div className="grid grid-cols-4 md:hidden border-t border-[#121212] bg-[#070707] text-[8px] font-mono font-bold">
+          {[
+            { id: 'overview', label: 'OVERVIEW' },
+            { id: 'automation', label: 'AUTOMATION' },
+            { id: 'schema', label: 'SCHEMA' },
+            { id: 'pricing', label: 'BILLING' }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => handleTabSwitch(t.id as ActiveTab)}
+              className={`py-3 text-center transition-all ${
+                activeTab === t.id
+                  ? 'bg-[#151515] text-[var(--accent)]'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </header>
 
-      {/* ── HERO ── */}
-      <section className="relative min-h-screen flex items-center pt-[72px] overflow-hidden">
-        {/* Background image */}
-        <div className="absolute inset-0 z-0">
-          <Image src="/images/hero.png" alt="" fill className="object-cover" priority />
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.85) 50%, var(--bg-base) 100%)' }} />
+      {/* ── MAIN CONTENT ZONE ── */}
+      <main className="flex-1 max-w-7xl mx-auto px-4 md:px-6 py-8 w-full relative z-10 space-y-12">
+        
+        {/* Render Active Tab Screen */}
+        <div className="min-h-[450px]">
+          {activeTab === 'overview' && <OverviewTab onGoToSignup={() => window.location.href = `${PORTAL}/auth?mode=signup`} />}
+          {activeTab === 'automation' && <AutomationTab />}
+          {activeTab === 'schema' && <SchemaTab />}
+          {activeTab === 'pricing' && <PricingTab onGoToSignup={() => window.location.href = `${PORTAL}/auth?mode=signup`} />}
         </div>
 
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 grid-dot-pattern opacity-40 z-[1]" />
-
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 md:py-32 w-full">
-          <div className="max-w-4xl">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full glass mb-10 animate-fade-up" style={{ animationFillMode: 'both' }}>
-              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'var(--accent)' }} />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-muted)' }}>
-                Trusted by 50+ property managers in Kenya
-              </span>
-            </div>
-
-            {/* Heading */}
-            <h1 className="hero-heading animate-fade-up delay-100" style={{ fontSize: 'clamp(3rem, 8vw, 6rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 0.9, animationFillMode: 'both' }}>
-              Property<br />management,<br />
-              <span className="text-gradient">simplified.</span>
-            </h1>
-
-            {/* Subhead */}
-            <p className="mt-8 text-lg md:text-xl leading-relaxed max-w-xl animate-fade-up delay-200" style={{ color: 'var(--text-muted)', animationFillMode: 'both' }}>
-              Track rent, manage tenants, send reminders, reconcile finances — all from one clean dashboard. Built for the way real managers actually work.
+        {/* ── COLLAPSIBLE TECHNICAL FAQ DIAGNOSTICS ── */}
+        <section className="border-t border-[#1a1a1a] pt-12 space-y-6">
+          <div className="text-center max-w-xl mx-auto">
+            <h3 className="text-xl font-black uppercase tracking-tight font-mono text-white flex items-center justify-center gap-2">
+              <HelpIcon size={16} className="text-[var(--accent)]" /> OPERATIONAL DIAGNOSTICS FAQ
+            </h3>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">
+              Exact answers to architectural limits, reconciliation timelines, and support cycles.
             </p>
-
-            {/* CTA */}
-            <div className="flex flex-col sm:flex-row gap-4 mt-12 animate-fade-up delay-300" style={{ animationFillMode: 'both' }}>
-              <a href={`${PORTAL}/auth?mode=signup`}
-                className="px-10 py-5 rounded-xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 group hover-lift"
-                style={{ background: 'var(--accent)', color: '#000' }}>
-                Start Free <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a href="#features"
-                className="px-10 py-5 rounded-xl text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 glass hover-lift">
-                See Features
-              </a>
-            </div>
-
-            {/* Social proof */}
-            <div className="flex items-center gap-6 mt-14 animate-fade-up delay-400" style={{ animationFillMode: 'both' }}>
-              <div className="flex -space-x-3">
-                {['JM', 'AW', 'BO', 'CM'].map((i, idx) => (
-                  <div key={idx} className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black border-2"
-                    style={{ background: idx % 2 === 0 ? '#27272a' : '#3f3f46', borderColor: 'var(--bg-base)', color: 'var(--text-muted)' }}>
-                    {i}
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="flex gap-0.5 mb-1">
-                  {[1,2,3,4,5].map(s => <Star key={s} size={14} fill="var(--accent)" color="var(--accent)" />)}
-                </div>
-                <p className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>Loved by managers across Nairobi</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── STATS BAR ── */}
-      <section ref={stats.ref} className="relative z-10 -mt-1" style={{ background: 'var(--bg-base)' }}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className={`grid grid-cols-2 md:grid-cols-4 gap-6 py-16 ${stats.visible ? 'animate-fade-up' : 'opacity-0'}`}
-            style={{ animationFillMode: 'both' }}>
-            {[
-              { val: 500, suffix: '+', label: 'Units Managed' },
-              { val: 98, suffix: '%', label: 'Rent Collected On Time' },
-              { val: 12, suffix: 'K+', label: 'Messages Sent' },
-              { val: 50, suffix: '+', label: 'Happy Managers' },
-            ].map((s, i) => (
-              <div key={i} className="text-center p-6 rounded-2xl glass hover-lift" style={{ animationDelay: `${i * 0.1}s` }}>
-                <p className="text-3xl md:text-4xl font-black tracking-tighter" style={{ color: 'var(--accent)' }}>
-                  <Counter end={s.val} suffix={s.suffix} />
-                </p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] mt-2" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FEATURES ── */}
-      <section id="features" ref={feat.ref} className="py-28 md:py-36 relative" style={{ background: 'var(--bg-base)' }}>
-        <div className="absolute inset-0 grid-pattern opacity-30" />
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
-
-          <div className={`text-center mb-20 ${feat.visible ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationFillMode: 'both' }}>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-6">
-              <Zap size={14} style={{ color: 'var(--accent)' }} />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-muted)' }}>Everything You Need</span>
-            </div>
-            <h2 className="section-heading text-4xl md:text-6xl font-black tracking-tighter">
-              One platform.<br /><span style={{ color: 'var(--text-dim)' }}>Zero headaches.</span>
-            </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: Building2, title: 'Property Setup', desc: 'Add buildings, map units by floor, set rent types — get fully operational in under 10 minutes.' },
-              { icon: Users, title: 'Tenant Records', desc: 'Store contacts, ID copies, move-in photos, next of kin, and arrears — all searchable and organized.' },
-              { icon: Receipt, title: 'Invoicing & Payments', desc: 'Generate monthly invoices with one click. Record M-Pesa, bank, or cash payments and auto-clear balances.' },
-              { icon: BarChart3, title: 'Financial Reports', desc: 'See exactly what you collected vs what you\'re owed. Property-level breakdowns, monthly trends, and exports.' },
-              { icon: MessageSquare, title: 'SMS & Email Reminders', desc: 'Send rent reminders, receipts, and announcements to tenants via SMS or email — individually or in bulk.' },
-              { icon: ShieldCheck, title: 'Owner Access', desc: 'Invite property owners to view their portfolio, occupancy rates, and earnings — with their own secure login.' },
-            ].map((f, i) => (
-              <div key={i}
-                className={`group p-8 md:p-10 rounded-2xl glass hover-lift cursor-default ${feat.visible ? 'animate-fade-up' : 'opacity-0'}`}
-                style={{ animationDelay: `${0.1 + i * 0.08}s`, animationFillMode: 'both' }}>
-                <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110"
-                  style={{ background: 'var(--accent-soft)' }}>
-                  <f.icon size={24} style={{ color: 'var(--accent)' }} />
-                </div>
-                <h3 className="text-xl font-black tracking-tight mb-3">{f.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── DASHBOARD PREVIEW ── */}
-      <section className="py-20 relative overflow-hidden" style={{ background: 'var(--bg-base)' }}>
-        <div className="max-w-6xl mx-auto px-6 relative z-10">
-          <div className="rounded-3xl overflow-hidden border glow-accent relative" style={{ borderColor: 'var(--border-strong)' }}>
-            <div className="absolute top-0 left-0 right-0 h-10 flex items-center px-4 gap-2 z-10"
-              style={{ background: 'rgba(10,10,10,0.9)', borderBottom: '1px solid var(--border)' }}>
-              <div className="w-3 h-3 rounded-full" style={{ background: '#ef4444' }} />
-              <div className="w-3 h-3 rounded-full" style={{ background: '#eab308' }} />
-              <div className="w-3 h-3 rounded-full" style={{ background: '#22c55e' }} />
-              <span className="ml-4 text-[10px] font-mono font-bold" style={{ color: 'var(--text-dim)' }}>portal.danesproperties.com</span>
-            </div>
-            <Image src="/images/dashboard.png" alt="Dane dashboard" width={1200} height={700}
-              className="w-full h-auto" style={{ marginTop: '40px' }} />
-          </div>
-        </div>
-      </section>
-
-      {/* ── HOW IT WORKS ── */}
-      <section id="how-it-works" ref={how.ref} className="py-28 md:py-36 relative" style={{ background: 'var(--bg-base)' }}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className={`text-center mb-20 ${how.visible ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationFillMode: 'both' }}>
-            <h2 className="section-heading text-4xl md:text-6xl font-black tracking-tighter">
-              Up and running<br /><span style={{ color: 'var(--text-dim)' }}>in three steps.</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { step: '01', title: 'Add Your Buildings', desc: 'Enter your properties, define unit types, floors, and base rents. The system auto-generates your unit matrix.', icon: Building2 },
-              { step: '02', title: 'Onboard Tenants', desc: 'Add tenant details, assign them to units, and record their move-in info. Arrears are calculated automatically.', icon: Users },
-              { step: '03', title: 'Manage Everything', desc: 'Generate invoices, record payments, send reminders, track expenses, and share reports with owners.', icon: BarChart3 },
-            ].map((s, i) => (
-              <div key={i}
-                className={`relative p-10 rounded-2xl glass hover-lift ${how.visible ? 'animate-fade-up' : 'opacity-0'}`}
-                style={{ animationDelay: `${0.15 + i * 0.15}s`, animationFillMode: 'both' }}>
-                <div className="text-[80px] font-black leading-none absolute top-6 right-8 select-none"
-                  style={{ color: 'var(--accent)', opacity: 0.08 }}>{s.step}</div>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-6"
-                  style={{ background: 'var(--accent-soft)' }}>
-                  <s.icon size={22} style={{ color: 'var(--accent)' }} />
-                </div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-3" style={{ color: 'var(--accent)' }}>Step {s.step}</p>
-                <h3 className="text-2xl font-black tracking-tight mb-4">{s.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS ── */}
-      <section id="testimonials" ref={test.ref} className="py-28 md:py-36 relative" style={{ background: 'var(--bg-base)' }}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className={`text-center mb-16 ${test.visible ? 'animate-fade-up' : 'opacity-0'}`} style={{ animationFillMode: 'both' }}>
-            <h2 className="section-heading text-4xl md:text-6xl font-black tracking-tighter">
-              Managers love<br /><span style={{ color: 'var(--text-dim)' }}>using Dane.</span>
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { name: 'James Mwangi', role: 'Manages 3 properties in Lavington', quote: 'I used to track everything on paper. Dane literally changed how I run my business. Invoices, reminders, arrears — it\'s all automatic now.' },
-              { name: 'Alice Wanjiku', role: 'Manages 45 units in Kileleshwa', quote: 'The reconciliation feature alone saved me 8 hours a month. I can see exactly who has paid and who hasn\'t, instantly.' },
-              { name: 'Brian Ochieng', role: 'Property owner, 2 buildings', quote: 'As an owner, I can log in and see my occupancy, revenue, and maintenance costs without calling my manager. That transparency is priceless.' },
-            ].map((t, i) => (
-              <div key={i}
-                className={`p-10 rounded-2xl glass hover-lift ${test.visible ? 'animate-fade-up' : 'opacity-0'}`}
-                style={{ animationDelay: `${0.1 + i * 0.12}s`, animationFillMode: 'both' }}>
-                <div className="flex gap-1 mb-6">
-                  {[1,2,3,4,5].map(s => <Star key={s} size={16} fill="var(--accent)" color="var(--accent)" />)}
-                </div>
-                <p className="text-base leading-relaxed mb-8" style={{ color: 'var(--text-muted)' }}>"{t.quote}"</p>
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-[11px] font-black"
-                    style={{ background: '#27272a', color: 'var(--text-muted)' }}>
-                    {t.name.split(' ').map(w => w[0]).join('')}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">{t.name}</p>
-                    <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{t.role}</p>
+          <div className="max-w-3xl mx-auto space-y-2">
+            {faqs.map((faq, idx) => {
+              const isOpen = openFaq === idx;
+              return (
+                <div 
+                  key={idx} 
+                  className="bg-[#0b0b0b] rounded-xl border border-[#141414] overflow-hidden transition-all duration-200"
+                >
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    className="w-full px-5 py-4 flex items-center justify-between text-left focus:outline-none"
+                  >
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-tight text-white">{faq.q}</span>
+                    <ChevronDown
+                      size={12}
+                      className={`text-[var(--text-muted)] transition-transform duration-200 ${isOpen ? 'rotate-180 text-[var(--accent)]' : ''}`}
+                    />
+                  </button>
+                  <div
+                    className={`transition-all duration-200 ease-in-out ${
+                      isOpen ? 'max-h-40 border-t border-[#141414]' : 'max-h-0'
+                    } overflow-hidden`}
+                  >
+                    <div className="p-5 text-[11px] leading-relaxed text-[var(--text-muted)] font-mono">
+                      {faq.a}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── FINAL CTA ── */}
-      <section ref={cta.ref} className="py-28 md:py-36 relative overflow-hidden" style={{ background: 'var(--bg-base)' }}>
-        <div className="absolute inset-0 grid-dot-pattern opacity-30" />
-        <div className={`max-w-4xl mx-auto px-6 text-center relative z-10 ${cta.visible ? 'animate-fade-up' : 'opacity-0'}`}
-          style={{ animationFillMode: 'both' }}>
+      </main>
 
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-10 animate-pulse-glow"
-            style={{ background: 'var(--accent)' }}>
-            <Building2 size={36} color="#000" />
-          </div>
-
-          <h2 className="text-4xl md:text-7xl font-black tracking-tighter leading-[0.9] mb-8">
-            Ready to take<br />control?
-          </h2>
-          <p className="text-lg md:text-xl leading-relaxed max-w-2xl mx-auto mb-14" style={{ color: 'var(--text-muted)' }}>
-            Join property managers across Kenya who are spending less time on admin and more time growing their portfolio.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href={`${PORTAL}/auth?mode=signup`}
-              className="px-12 py-6 rounded-xl text-base font-black uppercase tracking-widest flex items-center justify-center gap-3 group hover-lift"
-              style={{ background: 'var(--accent)', color: '#000' }}>
-              Start Using Dane <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </a>
+      {/* ── FOOTER TELEMETRY ── */}
+      <footer className="border-t border-[#151515] bg-[#070707] py-8 text-xs font-mono text-[var(--text-muted)]">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded bg-[var(--accent)] flex items-center justify-center">
+              <Building2 size={12} color="#000" />
+            </div>
+            <span className="text-xs font-black uppercase text-white">DANE SYSTEM</span>
           </div>
 
-          <p className="mt-8 text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: 'var(--text-dim)' }}>
-            Free to start · No credit card required
-          </p>
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer style={{ background: 'var(--bg-base)', borderTop: '1px solid var(--border)' }}>
-        <div className="max-w-7xl mx-auto px-6 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
-            {/* Brand */}
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent)' }}>
-                  <Building2 size={18} color="#000" />
-                </div>
-                <span className="text-xl font-black tracking-tighter">Dane.</span>
-              </div>
-              <p className="text-sm leading-relaxed max-w-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-                The modern property management platform for managers and owners in Kenya. Simple tools, real results.
-              </p>
-              <div className="flex items-center gap-4">
-                <a href="mailto:hello@danesproperties.com" className="flex items-center gap-2 text-[11px] font-bold hover:text-white transition-colors" style={{ color: 'var(--text-muted)' }}>
-                  <Mail size={14} /> hello@danesproperties.com
-                </a>
-              </div>
-            </div>
-
-            {/* Links */}
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-5" style={{ color: 'var(--text-dim)' }}>Product</p>
-              <div className="space-y-3">
-                {['Features', 'How It Works', 'Vacancies'].map(l => (
-                  <a key={l} href={l === 'Vacancies' ? '/vacancies' : `#${l.toLowerCase().replace(/ /g, '-')}`}
-                    className="block text-sm font-medium hover:text-white transition-colors" style={{ color: 'var(--text-muted)' }}>{l}</a>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-5" style={{ color: 'var(--text-dim)' }}>Access</p>
-              <div className="space-y-3">
-                {[
-                  { label: 'Manager Portal', href: PORTAL },
-                  { label: 'Owner Portal', href: PORTAL },
-                  { label: 'Sign Up', href: `${PORTAL}/auth?mode=signup` },
-                ].map(l => (
-                  <a key={l.label} href={l.href}
-                    className="block text-sm font-medium hover:text-white transition-colors flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                    {l.label} <ArrowUpRight size={12} />
-                  </a>
-                ))}
-              </div>
-            </div>
+          <div className="flex items-center gap-6 text-[10px]">
+            <a href="/terms" className="hover:text-white transition-colors">TERMS OF USE</a>
+            <a href="/privacy" className="hover:text-white transition-colors">PRIVACY CODE</a>
+            <a href="/cookies" className="hover:text-white transition-colors">COOKIE POLICY</a>
           </div>
 
-          <div className="pt-8 flex flex-col items-center md:items-start gap-6" style={{ borderTop: '1px solid var(--border)' }}>
-            <div className="w-full flex flex-col md:flex-row items-center justify-between gap-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: 'var(--text-dim)' }}>
-                © {new Date().getFullYear()} Dane Properties Limited · All rights reserved
-              </p>
-              <div className="flex gap-6">
-                <Link href="/privacy" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Privacy</Link>
-                <Link href="/terms" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Terms</Link>
-                <Link href="/cookies" className="text-[10px] font-bold uppercase tracking-[0.15em] hover:text-white transition-colors" style={{ color: 'var(--text-dim)' }}>Cookies</Link>
-              </div>
-            </div>
-            
-            <div className="w-full flex justify-center md:justify-start">
-              <a 
-                href="https://kihumba.com" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="group flex items-center gap-2 text-[9px] font-mono uppercase tracking-widest text-[var(--text-dim)] hover:text-white transition-all"
-              >
-                <span className="opacity-40">Crafted by</span>
-                <span className="font-bold relative">
-                  Kihumba
-                  <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-[var(--accent)] transition-all group-hover:w-full"></span>
-                </span>
-                <ArrowUpRight size={10} className="opacity-0 -translate-x-2 text-[var(--accent)] group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-              </a>
-            </div>
+          <div className="text-[9px] text-[var(--text-dim)]">
+            © {new Date().getFullYear()} DANE PMS. POWERED BY NESTJS & NEON DATABASE.
           </div>
         </div>
       </footer>
+
     </div>
   );
 }
